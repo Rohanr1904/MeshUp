@@ -23,6 +23,18 @@ object AppConstants {
         const val CONNECTION_CLEANUP_INTERVAL_MS: Long = 30_000L
         const val BROADCAST_CLEANUP_DELAY_MS: Long = 500L
 
+        // Inbound packet bounding (R-5.2). Deliberately generous so file/voice fragment bursts are
+        // not throttled; to be tuned on physical devices (Decision 009).
+        const val STRIPES: Int = 16
+        const val STRIPE_CAPACITY: Int = 256
+        const val LINK_RATE_PER_SEC: Int = 200
+        const val LINK_BURST: Int = 400
+        const val MAX_LINK_BUCKETS: Int = 256
+        const val LINK_INITIAL_TOKENS: Int = 50 // new link (e.g. reconnect) starts small, refills to LINK_BURST
+        const val STRIPE_LINK_QUOTA: Int = STRIPE_CAPACITY / 4 // max queued packets per link per stripe
+        const val GLOBAL_RATE_PER_SEC: Int = 500 // process-wide cap; tune on devices as well
+        const val GLOBAL_BURST: Int = 1000
+
         object Gatt {
             val SERVICE_UUID: UUID = UUID.fromString("F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
             val CHARACTERISTIC_UUID: UUID = UUID.fromString("A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")

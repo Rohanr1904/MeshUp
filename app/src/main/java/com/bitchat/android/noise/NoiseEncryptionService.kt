@@ -480,20 +480,6 @@ class NoiseEncryptionService(
     // MARK: - Packet Signing/Verification
 
     /**
-     * Sign a BitchatPacket using our Ed25519 signing key
-     */
-    fun signPacket(packet: com.bitchat.android.protocol.BitchatPacket): com.bitchat.android.protocol.BitchatPacket? {
-        // Create canonical packet bytes for signing
-        val packetData = packet.toBinaryDataForSigning() ?: return null
-        
-        // Sign with our Ed25519 signing private key
-        val signature = signData(packetData) ?: return null
-        
-        // Return new packet with signature
-        return packet.copy(signature = signature)
-    }
-
-    /**
      * Verify a BitchatPacket signature using the provided public key
      */
     fun verifyPacketSignature(packet: com.bitchat.android.protocol.BitchatPacket, publicKey: ByteArray): Boolean {

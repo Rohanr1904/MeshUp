@@ -22,7 +22,7 @@ class GossipSyncManager(
     interface Delegate {
         fun sendPacket(packet: BitchatPacket)
         fun sendPacketToPeer(peerID: String, packet: BitchatPacket)
-        fun signPacketForBroadcast(packet: BitchatPacket): BitchatPacket
+        fun signPacketForBroadcast(packet: BitchatPacket): BitchatPacket?
     }
 
     interface ConfigProvider {
@@ -153,7 +153,11 @@ class GossipSyncManager(
             ttl = com.bitchat.android.util.AppConstants.SYNC_TTL_HOPS // neighbors only
         )
         // Sign and broadcast
-        val signed = delegate?.signPacketForBroadcast(packet) ?: packet
+        val signed = delegate?.signPacketForBroadcast(packet)
+        if (signed == null) {
+            Log.w(TAG, "Signing failed for REQUEST_SYNC; skipping send")
+            return
+        }
         delegate?.sendPacket(signed)
     }
 
@@ -170,7 +174,11 @@ class GossipSyncManager(
         )
         Log.d(TAG, "Sending sync request to $peerID (${payload.size} bytes)")
         // Sign and send directly to peer
-        val signed = delegate?.signPacketForBroadcast(packet) ?: packet
+        val signed = delegate?.signPacketForBroadcast(packet)
+        if (signed == null) {
+            Log.w(TAG, "Signing failed for REQUEST_SYNC; skipping send")
+            return
+        }
         delegate?.sendPacketToPeer(peerID, signed)
     }
 

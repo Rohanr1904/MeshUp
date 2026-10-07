@@ -22,7 +22,7 @@ object MeshServiceHolder {
     @Synchronized
     fun setGossipManager(
         mgr: GossipSyncManager,
-        signer: (BitchatPacket) -> BitchatPacket
+        signer: (BitchatPacket) -> BitchatPacket?
     ) {
         val previous = sharedGossipSyncManager
         if (previous !== mgr) {
@@ -53,7 +53,7 @@ object MeshServiceHolder {
     }
 
     private class TransportGossipDelegate(
-        private val signer: (BitchatPacket) -> BitchatPacket
+        private val signer: (BitchatPacket) -> BitchatPacket?
     ) : GossipSyncManager.Delegate {
         override fun sendPacket(packet: BitchatPacket) {
             TransportBridgeService.broadcastFromLocal(RoutedPacket(packet))
@@ -63,7 +63,7 @@ object MeshServiceHolder {
             TransportBridgeService.sendToPeerFromLocal(peerID, packet)
         }
 
-        override fun signPacketForBroadcast(packet: BitchatPacket): BitchatPacket {
+        override fun signPacketForBroadcast(packet: BitchatPacket): BitchatPacket? {
             return signer(packet)
         }
     }

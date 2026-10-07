@@ -6,7 +6,10 @@ import com.bitchat.android.protocol.MessageType
 import com.bitchat.android.model.RoutedPacket
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.BufferOverflow
+import com.bitchat.android.util.AppConstants
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Processes incoming packets and routes them to appropriate handlers
@@ -15,11 +18,15 @@ import kotlinx.coroutines.channels.actor
  * Prevents race condition where multiple threads process packets
  * from the same peer simultaneously, causing session management conflicts.
  */
-class PacketProcessor(private val myPeerID: String) {
+class PacketProcessor(
+    private val myPeerID: String,
+    private val clockNanos: () -> Long = System::nanoTime
+) {
     private val debugManager by lazy { try { com.bitchat.android.ui.debug.DebugSettingsManager.getInstance() } catch (e: Exception) { null } }
     
     companion object {
         private const val TAG = "PacketProcessor"
+        private const val DROP_LOG_INTERVAL_MS = 5_000L
     }
     
     // Delegate for callbacks
@@ -37,31 +44,127 @@ class PacketProcessor(private val myPeerID: String) {
     // Coroutines
     private val processorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
-    // Per-peer actors to serialize packet processing
-    // Each peer gets its own actor that processes packets sequentially
-    // This prevents race conditions in session management
-    private val peerActors = mutableMapOf<String, CompletableDeferred<Unit>>()
-    
-    @OptIn(ObsoleteCoroutinesApi::class)
-    private fun getOrCreateActorForPeer(peerID: String) = processorScope.actor<RoutedPacket>(
-        capacity = Channel.UNLIMITED
-    ) {
-        for (packet in channel) {
-            handleReceivedPacket(packet)
-        }
+    // A queued packet remembers its link key so per-stripe link occupancy is released exactly once
+    // (on dequeue, DROP_OLDEST eviction, cancel, or failed send).
+    private class Queued(val routed: RoutedPacket, val linkKey: String?, val stripe: Int) {
+        val released = AtomicBoolean(false)
     }
-    
-    // Cache actors to reuse them
-    private val actors = mutableMapOf<String, kotlinx.coroutines.channels.SendChannel<RoutedPacket>>()
-    
+
+    // Fixed pool of bounded stripes. Each stripe has exactly one consumer, so packets that hash to
+    // the same stripe (same peerID) are processed sequentially in arrival order. peerID is an
+    // unauthenticated header field, so memory must never scale with the number of distinct peerIDs.
+    private val stripes: List<Channel<Queued>> = List(AppConstants.Mesh.STRIPES) {
+        Channel(
+            capacity = AppConstants.Mesh.STRIPE_CAPACITY,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            onUndeliveredElement = { q ->
+                releaseSlot(q)
+                recordDrop("stripe overflow")
+            }
+        )
+    }
+    private val stripeJobs: List<Job>
+
+    // Per-stripe queued-packet count per link key; entries removed at 0, so bounded by queue capacity.
+    // Each map is guarded by its own monitor.
+    private val stripeLinkCounts: List<HashMap<String, Int>> = List(AppConstants.Mesh.STRIPES) { HashMap() }
+
+    @Volatile private var closed = false
+    private val droppedPackets = AtomicLong(0)
+    private val lastDropLogMs = AtomicLong(0)
+
+    // Token buckets. Per-link key = ingressLinkID ?: relayAddress, LRU-bounded; plus one process-wide
+    // bucket. All guarded by linkBuckets' monitor. Reconnects get a fresh link key (fresh bucket), so
+    // new buckets start small and the global bucket caps the aggregate.
+    private class Bucket(var tokens: Double, var lastNanos: Long)
+    private val linkBuckets = object : LinkedHashMap<String, Bucket>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bucket>?): Boolean =
+            size > AppConstants.Mesh.MAX_LINK_BUCKETS
+    }
+    private val globalBucket = Bucket(AppConstants.Mesh.GLOBAL_BURST.toDouble(), clockNanos())
+
+    internal val droppedPacketCount: Long get() = droppedPackets.get()
+    internal val stripeCount: Int get() = stripes.size
+    internal val linkBucketCount: Int get() = synchronized(linkBuckets) { linkBuckets.size }
+
     init {
         // Set up the packet relay manager delegate immediately
         setupRelayManager()
+        stripeJobs = stripes.map { channel ->
+            processorScope.launch {
+                for (queued in channel) {
+                    releaseSlot(queued)
+                    try {
+                        handleReceivedPacket(queued.routed)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Packet handling failed: ${e.message}")
+                    }
+                }
+            }
+        }
     }
-    
+
+    private fun recordDrop(reason: String) {
+        if (closed) return
+        droppedPackets.incrementAndGet()
+        val now = System.currentTimeMillis()
+        val last = lastDropLogMs.get()
+        if (now - last >= DROP_LOG_INTERVAL_MS && lastDropLogMs.compareAndSet(last, now)) {
+            Log.d(TAG, "Dropping packets ($reason); total dropped=${droppedPackets.get()}")
+        }
+    }
+
+    private fun releaseSlot(q: Queued) {
+        val key = q.linkKey ?: return
+        if (!q.released.compareAndSet(false, true)) return
+        val counts = stripeLinkCounts[q.stripe]
+        synchronized(counts) {
+            val n = (counts[key] ?: return) - 1
+            if (n <= 0) counts.remove(key) else counts[key] = n
+        }
+    }
+
+    /** Takes a slot if the link is under its per-stripe quota. */
+    private fun acquireSlot(stripe: Int, key: String): Boolean {
+        val counts = stripeLinkCounts[stripe]
+        synchronized(counts) {
+            val n = counts[key] ?: 0
+            if (n >= AppConstants.Mesh.STRIPE_LINK_QUOTA) return false
+            counts[key] = n + 1
+            return true
+        }
+    }
+
+    private fun refill(b: Bucket, now: Long, burst: Double, ratePerSec: Int) {
+        // Clamp so a backwards clock can neither add negative tokens nor explode on recovery.
+        val elapsed = (now - b.lastNanos).coerceAtLeast(0L)
+        b.tokens = minOf(burst, b.tokens + elapsed / 1e9 * ratePerSec)
+        b.lastNanos = now
+    }
+
+    /** Per-link then global token bucket. Returns null if admitted, else the drop reason. */
+    private fun admit(linkKey: String): String? {
+        val now = clockNanos()
+        synchronized(linkBuckets) {
+            val bucket = linkBuckets.getOrPut(linkKey) {
+                Bucket(AppConstants.Mesh.LINK_INITIAL_TOKENS.toDouble(), now)
+            }
+            refill(bucket, now, AppConstants.Mesh.LINK_BURST.toDouble(), AppConstants.Mesh.LINK_RATE_PER_SEC)
+            if (bucket.tokens < 1.0) return "link rate limit"
+            refill(globalBucket, now, AppConstants.Mesh.GLOBAL_BURST.toDouble(), AppConstants.Mesh.GLOBAL_RATE_PER_SEC)
+            if (globalBucket.tokens < 1.0) return "global rate limit"
+            bucket.tokens -= 1.0
+            globalBucket.tokens -= 1.0
+            return null
+        }
+    }
+
     /**
-     * Process received packet - main entry point for all incoming packets
-     * SURGICAL FIX: Route to per-peer actor for serialized processing
+     * Process received packet - main entry point for all incoming packets.
+     * Rate-limits per physical link, then enqueues synchronously onto a bounded stripe
+     * (drop-oldest) so per-peer arrival order is preserved.
      */
     fun processPacket(routed: RoutedPacket) {
         val peerID = routed.peerID
@@ -70,19 +173,28 @@ class PacketProcessor(private val myPeerID: String) {
             Log.w(TAG, "Received packet with no peer ID, skipping")
             return
         }
-        
-        // Get or create actor for this peer
-        val actor = actors.getOrPut(peerID) { getOrCreateActorForPeer(peerID) }
-        
-        // Send packet to peer's dedicated actor for serialized processing
-        processorScope.launch {
-            try {
-                actor.send(routed)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to send packet to actor for ${formatPeerForLog(peerID)}: ${e.message}")
-                // Fallback to direct processing if actor fails
-                handleReceivedPacket(routed)
+
+        // Link identity comes from the transport, never from packet contents. No key => local injection.
+        val linkKey = routed.ingressLinkID ?: routed.relayAddress
+        if (linkKey != null) {
+            val reason = admit(linkKey)
+            if (reason != null) {
+                recordDrop(reason)
+                return
             }
+        }
+
+        val index = (peerID.hashCode() and Int.MAX_VALUE) % stripes.size
+        // A link cannot occupy more than its quota of one stripe, so a peerID-forging flood on one
+        // link cannot evict another link's queued packets via DROP_OLDEST.
+        if (linkKey != null && !acquireSlot(index, linkKey)) {
+            recordDrop("link stripe quota")
+            return
+        }
+        val queued = Queued(routed, linkKey, index)
+        if (stripes[index].trySend(queued).isFailure) {
+            releaseSlot(queued)
+            recordDrop("stripe closed")
         }
     }
     
@@ -209,6 +321,8 @@ class PacketProcessor(private val myPeerID: String) {
     private suspend fun handleFragment(routed: RoutedPacket) {
         val reassembledPacket = delegate?.handleFragment(routed.packet)
         if (reassembledPacket != null) {
+            // Intentionally bypasses the ingress rate limit/queue: every fragment already paid the
+            // per-link and global limits in processPacket.
             handleReceivedPacket(
                 RoutedPacket(
                     packet = reassembledPacket,
@@ -245,15 +359,9 @@ class PacketProcessor(private val myPeerID: String) {
         return buildString {
             appendLine("=== Packet Processor Debug Info ===")
             appendLine("Processor Scope Active: ${processorScope.isActive}")
-            appendLine("Active Peer Actors: ${actors.size}")
+            appendLine("Stripes: ${stripes.size}, dropped packets: ${droppedPackets.get()}")
+            appendLine("Link buckets: $linkBucketCount")
             appendLine("My Peer ID: $myPeerID")
-            
-            if (actors.isNotEmpty()) {
-                appendLine("Peer Actors:")
-                actors.keys.forEach { peerID ->
-                    appendLine("  - $peerID")
-                }
-            }
         }
     }
     
@@ -261,13 +369,11 @@ class PacketProcessor(private val myPeerID: String) {
      * Shutdown the processor and all peer actors
      */
     fun shutdown() {
-        Log.d(TAG, "Shutting down PacketProcessor and ${actors.size} peer actors")
-        
-        // Close all peer actors gracefully
-        actors.values.forEach { actor ->
-            actor.close()
-        }
-        actors.clear()
+        Log.d(TAG, "Shutting down PacketProcessor and ${stripes.size} stripes")
+
+        closed = true
+        stripes.forEach { it.cancel() } // discards buffered packets; recordDrop is a no-op once closed
+        stripeJobs.forEach { it.cancel() }
         
         // Shutdown the relay manager
         packetRelayManager.shutdown()
