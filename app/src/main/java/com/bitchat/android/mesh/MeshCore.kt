@@ -143,7 +143,7 @@ class MeshCore(
                     TransportBridgeService.sendToPeer(transport.id, peerID, packet)
                 }
 
-                override fun signPacketForBroadcast(packet: BitchatPacket): BitchatPacket {
+                override fun signPacketForBroadcast(packet: BitchatPacket): BitchatPacket? {
                     return signPacketBeforeBroadcast(packet)
                 }
             }
@@ -260,7 +260,8 @@ class MeshCore(
                     payload = response,
                     ttl = maxTtl
                 )
-                dispatchGlobal(RoutedPacket(signPacketBeforeBroadcast(responsePacket)))
+                val signedPacket = signPacketBeforeBroadcast(responsePacket) ?: return
+                dispatchGlobal(RoutedPacket(signedPacket))
             }
 
             override fun getPeerInfo(peerID: String): PeerInfo? = peerManager.getPeerInfo(peerID)
@@ -331,7 +332,7 @@ class MeshCore(
             }
 
             override fun sendPacket(packet: BitchatPacket) {
-                val signedPacket = signPacketBeforeBroadcast(packet)
+                val signedPacket = signPacketBeforeBroadcast(packet) ?: return
                 dispatchGlobal(RoutedPacket(signedPacket))
             }
 
@@ -543,7 +544,8 @@ class MeshCore(
                 signature = null,
                 ttl = maxTtl
             )
-            val signedPacket = signPacketBeforeBroadcast(packet)
+            // Public broadcast has no per-message delivery status; failure is logged only.
+            val signedPacket = signPacketBeforeBroadcast(packet) ?: return@launch
             dispatchGlobal(RoutedPacket(signedPacket))
             try { gossipSyncManager.onPublicPacketSeen(signedPacket) } catch (_: Exception) { }
         }
@@ -569,7 +571,7 @@ class MeshCore(
             payload = ciphertext,
             ttl = maxTtl
         )
-        val signed = signPacketBeforeBroadcast(packet)
+        val signed = signPacketBeforeBroadcast(packet) ?: return false
         if (signed.signature?.size != 64) return false
         dispatchGlobal(RoutedPacket(signed))
         return true
@@ -589,8 +591,12 @@ class MeshCore(
                     signature = null,
                     ttl = maxTtl
                 )
-                val signed = signPacketBeforeBroadcast(packet)
                 val transferId = MeshPacketUtils.sha256Hex(payload)
+                val signed = signPacketBeforeBroadcast(packet)
+                if (signed == null) {
+                    TransferProgressManager.fail(transferId)
+                    return@launch
+                }
                 dispatchGlobal(RoutedPacket(signed, transferId = transferId))
                 try { gossipSyncManager.onPublicPacketSeen(signed) } catch (_: Exception) { }
             }
@@ -652,7 +658,8 @@ class MeshCore(
                     ttl = maxTtl
                 )
             }
-            dispatchGlobal(RoutedPacket(signPacketBeforeBroadcast(packet)))
+            val signed = signPacketBeforeBroadcast(packet) ?: return
+            dispatchGlobal(RoutedPacket(signed))
         } catch (e: Exception) {
             Log.w("MeshCore", "Live voice frame send failed: ${e.message}")
         }
@@ -728,6 +735,15 @@ class MeshCore(
                         ttl = maxTtl
                     )
                     val signedPacket = signPacketBeforeBroadcast(packet)
+                    if (signedPacket == null) {
+                        try {
+                            com.bitchat.android.services.AppStateStore.updatePrivateMessageStatus(
+                                finalMessageID,
+                                com.bitchat.android.model.DeliveryStatus.Failed("Message could not be signed")
+                            )
+                        } catch (_: Exception) { }
+                        return@launch
+                    }
                     dispatchGlobal(RoutedPacket(signedPacket))
                 } catch (e: Exception) {
                     Log.e("MeshCore", "Failed to encrypt private message: ${e.message}")
@@ -757,7 +773,7 @@ class MeshCore(
                     signature = null,
                     ttl = maxTtl
                 )
-                val signedPacket = signPacketBeforeBroadcast(packet)
+                val signedPacket = signPacketBeforeBroadcast(packet) ?: return@launch
                 val retryKey = "$recipientPeerID:$messageID"
                 readReceiptRetrySender.enqueue(
                     key = retryKey,
@@ -812,7 +828,8 @@ class MeshCore(
                     signature = null,
                     ttl = maxTtl
                 )
-                dispatchGlobal(RoutedPacket(signPacketBeforeBroadcast(packet)))
+                val signedPacket = signPacketBeforeBroadcast(packet) ?: return@launch
+                dispatchGlobal(RoutedPacket(signedPacket))
             } catch (e: Exception) {
                 Log.e("MeshCore", "Failed to send Noise payload to $recipientPeerID: ${e.message}")
             }
@@ -840,7 +857,8 @@ class MeshCore(
                 senderID = myPeerID,
                 payload = tlvPayload
             )
-            val signedPacket = signPacketBeforeBroadcast(announcePacket)
+            // Fail closed: skip this announce; the periodic announce loop retries.
+            val signedPacket = signPacketBeforeBroadcast(announcePacket) ?: return@launch
             dispatchGlobal(RoutedPacket(signedPacket))
             try { gossipSyncManager.onPublicPacketSeen(signedPacket) } catch (_: Exception) { }
         }
@@ -861,7 +879,7 @@ class MeshCore(
             senderID = myPeerID,
             payload = tlvPayload
         )
-        val signedPacket = signPacketBeforeBroadcast(packet)
+        val signedPacket = signPacketBeforeBroadcast(packet) ?: return
         dispatchGlobal(RoutedPacket(signedPacket))
         peerManager.markPeerAsAnnouncedTo(peerID)
         try { gossipSyncManager.onPublicPacketSeen(signedPacket) } catch (_: Exception) { }
@@ -906,7 +924,7 @@ class MeshCore(
             senderID = myPeerID,
             payload = payload
         )
-        val signedPacket = signPacketBeforeBroadcast(packet)
+        val signedPacket = signPacketBeforeBroadcast(packet) ?: return
         dispatchGlobal(RoutedPacket(signedPacket))
     }
 
@@ -967,7 +985,7 @@ class MeshCore(
                     payload = handshakeData,
                     ttl = maxTtl
                 )
-                val signedPacket = signPacketBeforeBroadcast(packet)
+                val signedPacket = signPacketBeforeBroadcast(packet) ?: return@launch
                 dispatchGlobal(RoutedPacket(signedPacket))
             } catch (e: Exception) {
                 Log.e("MeshCore", "Failed to initiate Noise handshake with $peerID: ${e.message}")
@@ -1074,19 +1092,17 @@ class MeshCore(
         return routed.copy(signature = signature)
     }
 
-    private fun signPacketBeforeBroadcast(packet: BitchatPacket): BitchatPacket {
-        return try {
-            val withRoute = applyRouteIfAvailable(packet)
-
-            val packetDataForSigning = withRoute.toBinaryDataForSigning() ?: return withRoute
-            val signature = encryptionService.signData(packetDataForSigning)
-            if (signature != null) {
-                withRoute.copy(signature = signature)
-            } else {
-                withRoute
-            }
-        } catch (_: Exception) {
-            packet
+    /** Fail closed: returns null on any signing failure. Callers must not send. */
+    private fun signPacketBeforeBroadcast(packet: BitchatPacket): BitchatPacket? {
+        val signed = signOrNull(
+            packet,
+            applyRoute = ::applyRouteIfAvailable,
+            encode = { it.toBinaryDataForSigning() },
+            sign = { encryptionService.signData(it) }
+        )
+        if (signed == null) {
+            Log.w("MeshCore", "Signing failed for packet type ${packet.type}; not sending")
         }
+        return signed
     }
 }
