@@ -10,6 +10,7 @@ import android.util.Log
 import com.bitchat.android.model.BitchatMessage
 import com.bitchat.android.model.BitchatMessageType
 import com.bitchat.android.model.DeliveryStatus
+import com.bitchat.android.util.AppConstants
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -304,6 +305,35 @@ class ConversationRepository internal constructor(
         }
     }
 
+    // Outbox access for the delivery engine (P2-PR8). The store itself is never handed out: it
+    // shares the database connection, so every call is confined to the repository dispatcher.
+    internal suspend fun outboxEnqueue(entry: OutboxEntry): OutboxEnqueueResult =
+        withContext(dispatcher) { database.outbox.enqueue(entry) }
+
+    internal suspend fun outboxMarkSent(messageId: String, nextAttemptAt: Long): Boolean =
+        withContext(dispatcher) { database.outbox.markSent(messageId, nextAttemptAt) }
+
+    internal suspend fun outboxRecordAttempt(
+        messageId: String,
+        attempts: Int,
+        nextAttemptAt: Long,
+        lastError: OutboxError
+    ): Boolean = withContext(dispatcher) {
+        database.outbox.recordAttempt(messageId, attempts, nextAttemptAt, lastError)
+    }
+
+    internal suspend fun outboxRemove(messageId: String): Boolean =
+        withContext(dispatcher) { database.outbox.remove(messageId) }
+
+    internal suspend fun outboxLoadAll(): OutboxLoadResult =
+        withContext(dispatcher) { database.outbox.loadAll() }
+
+    internal suspend fun outboxLoadDue(now: Long): OutboxLoadResult =
+        withContext(dispatcher) { database.outbox.loadDue(now) }
+
+    internal suspend fun outboxExpiredBefore(cutoff: Long): OutboxLoadResult =
+        withContext(dispatcher) { database.outbox.expiredBefore(cutoff) }
+
     /**
      * Drains earlier writes and completes the database wipe before returning.
      *
@@ -380,7 +410,9 @@ internal class ConversationDatabase(
     private val maxPayloadBytes: Long = MAX_PAYLOAD_BYTES,
     private val maxMediaBytes: Long = MAX_MEDIA_BYTES,
     private val storageCipher: ConversationStorageCipher =
-        AndroidConversationStorageCipher()
+        AndroidConversationStorageCipher(),
+    // Injectable so the v4 -> v5 outbox backfill is deterministic in tests.
+    private val clock: () -> Long = System::currentTimeMillis
 ) : SQLiteOpenHelper(context, databaseName, null, DATABASE_VERSION) {
 
     companion object {
@@ -391,13 +423,17 @@ internal class ConversationDatabase(
         const val MAX_MEDIA_BYTES = 256L * 1024L * 1024L
 
         internal const val DEFAULT_DATABASE_NAME = "private_conversations.db"
-        internal const val DATABASE_VERSION = 4
+        internal const val DATABASE_VERSION = 5
         private const val PRUNE_INTERVAL = 64
         private const val PRUNE_BATCH_SIZE = 256
+        private const val BACKFILL_FAILURE_REASON = "Not delivered"
     }
 
     private val applicationContext = context.applicationContext
     private var writesSinceGlobalPrune = 0
+
+    /** Durable outbox on this database. Use only on the repository executor. */
+    internal val outbox: OutboxStore by lazy { OutboxStore(this, storageCipher) }
 
     init {
         setWriteAheadLoggingEnabled(true)
@@ -507,6 +543,7 @@ internal class ConversationDatabase(
             "CREATE INDEX idx_deleted_private_messages_time " +
                 "ON deleted_private_messages(deleted_at)"
         )
+        OutboxStore.createSchema(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -542,8 +579,145 @@ internal class ConversationDatabase(
             }
             version = 4
         }
+        if (version == 4) {
+            migrateVersion4To5(db)
+            version = 5
+        }
         check(version == newVersion) {
             "Missing conversation database migration from $version to $newVersion"
+        }
+    }
+
+    /**
+     * Adds the durable outbox and backfills stuck `Sending` messages. Runs inside SQLite's upgrade
+     * transaction; any row problem marks that row Failed instead of aborting the migration.
+     *
+     * "Ours" = delivery_type Sending (1) AND is_private AND NOT is_relay. Only locally authored
+     * sends are ever stored as Sending (PrivateChatManager, ConversationNotificationReceiver);
+     * incoming rows are persisted with a null delivery status (0).
+     * Text rows younger than OUTBOX_EXPIRY_MS (by sent_at; exactly at the cutoff still counts as
+     * young) are queued, subject to the per-conversation and global caps. Everything else is
+     * Failed: old rows, non-text, Nostr/geohash conversations, over-cap rows, unreadable rows.
+     */
+    private fun migrateVersion4To5(db: SQLiteDatabase) {
+        OutboxStore.createSchema(db)
+        val now = clock()
+        val cutoff = now - AppConstants.Router.OUTBOX_EXPIRY_MS
+        data class Stuck(
+            val id: String,
+            val conversationId: String,
+            val messageType: Int,
+            val sentAt: Long,
+            val recipientNicknameColumn: String?,
+            val payload: ByteArray?
+        )
+        val stuck = ArrayList<Stuck>()
+        db.query(
+            "private_messages",
+            arrayOf(
+                "message_id", "conversation_id", "message_type", "sent_at",
+                "recipient_nickname", "payload_ciphertext"
+            ),
+            "delivery_type = 1 AND is_private = 1 AND is_relay = 0",
+            null, null, null, "arrival_sequence ASC"
+        ).use { c ->
+            while (c.moveToNext()) {
+                stuck += Stuck(
+                    c.getString(0), c.getString(1), c.getInt(2), c.getLong(3),
+                    if (c.isNull(4)) null else c.getString(4),
+                    if (c.isNull(5)) null else c.getBlob(5)
+                )
+            }
+        }
+        val queuedPerConversation = HashMap<String, Int>()
+        var queuedTotal = 0
+        for (row in stuck) {
+            var queued = false
+            var payloadJson: JSONObject? = null
+            try {
+                payloadJson = row.payload?.let {
+                    JSONObject(
+                        storageCipher.decrypt(it, messagePayloadAad(row.id))
+                            .toString(Charsets.UTF_8)
+                    )
+                }
+                val isText = row.messageType == BitchatMessageType.Message.ordinal
+                val conversationKey = row.conversationId.lowercase()
+                // Nostr/geohash conversations are not resendable from the mesh outbox; per
+                // conversation (D2) and global caps apply so a bad history cannot flood the queue.
+                if (isText && payloadJson != null && row.sentAt >= cutoff &&
+                    !ContactIdentityResolver.isNostrAlias(row.conversationId) &&
+                    queuedTotal < AppConstants.Router.OUTBOX_GLOBAL_LIMIT &&
+                    (queuedPerConversation[conversationKey] ?: 0) <
+                    AppConstants.Router.OUTBOX_PER_PEER_LIMIT
+                ) {
+                    val nickname = payloadJson.optionalString("recipient_nickname")
+                        ?: row.recipientNicknameColumn.orEmpty()
+                    // CONFLICT_IGNORE: a re-run finds the row already queued and leaves it alone.
+                    db.insertWithOnConflict(
+                        OutboxStore.TABLE,
+                        null,
+                        ContentValues().apply {
+                            put("message_id", row.id)
+                            put("conversation_id", row.conversationId)
+                            put(
+                                "payload",
+                                OutboxStore.encodePayload(
+                                    storageCipher,
+                                    row.id,
+                                    OutboxStore.Payload(
+                                        content = payloadJson.getString("content"),
+                                        recipientNickname = nickname,
+                                        toPeerId = row.conversationId,
+                                        timestampMs = row.sentAt
+                                    )
+                                )
+                            )
+                            put("state", OutboxState.QUEUED.code)
+                            put("attempts", 0)
+                            put("created_at", row.sentAt)
+                            put("next_attempt_at", now)
+                            put("last_error_code", OutboxError.NONE.code)
+                        },
+                        SQLiteDatabase.CONFLICT_IGNORE
+                    )
+                    queued = true
+                    queuedTotal++
+                    queuedPerConversation[conversationKey] =
+                        (queuedPerConversation[conversationKey] ?: 0) + 1
+                }
+            } catch (error: Exception) {
+                Log.w(TAG, "Outbox backfill could not rebuild a Sending row: ${error.javaClass.simpleName}")
+            }
+            if (!queued) markBackfillFailed(db, row.id, payloadJson)
+        }
+    }
+
+    private fun markBackfillFailed(db: SQLiteDatabase, messageID: String, payloadJson: JSONObject?) {
+        try {
+            val values = ContentValues().apply {
+                put("delivery_type", 5)
+                putNull("delivery_text")
+                if (payloadJson != null) {
+                    // The failure reason is sensitive-text and lives in the encrypted payload.
+                    payloadJson.put("delivery_text", BACKFILL_FAILURE_REASON)
+                    put(
+                        "payload_ciphertext",
+                        storageCipher.encrypt(
+                            payloadJson.toString().toByteArray(Charsets.UTF_8),
+                            messagePayloadAad(messageID)
+                        )
+                    )
+                }
+            }
+            db.update("private_messages", values, "message_id = ?", arrayOf(messageID))
+        } catch (error: Exception) {
+            // Fall back to a plain status flip so the row can never stay Sending forever.
+            Log.w(TAG, "Outbox backfill re-encrypt failed: ${error.javaClass.simpleName}")
+            db.execSQL(
+                "UPDATE private_messages SET delivery_type = 5 WHERE message_id = ?",
+                arrayOf(messageID)
+            )
         }
     }
 
@@ -1007,6 +1181,10 @@ internal class ConversationDatabase(
                 }
             val attachmentCandidates = attachmentCandidatesLocked(this, messageIDs)
             ids.filter { it.isNotBlank() }.forEach { id ->
+                delete(OutboxStore.TABLE, "conversation_id = ? COLLATE NOCASE", arrayOf(id))
+            }
+            messageIDs.forEach { delete(OutboxStore.TABLE, "message_id = ?", arrayOf(it)) }
+            ids.filter { it.isNotBlank() }.forEach { id ->
                 delete(
                     "conversations",
                     "conversation_id = ? COLLATE NOCASE",
@@ -1030,6 +1208,7 @@ internal class ConversationDatabase(
                 SQLiteDatabase.CONFLICT_REPLACE
             )
             delete("private_messages", "message_id = ?", arrayOf(messageID))
+            delete(OutboxStore.TABLE, "message_id = ?", arrayOf(messageID))
             delete(
                 "conversations",
                 """
@@ -1092,6 +1271,7 @@ internal class ConversationDatabase(
             delete("private_messages", null, null)
             delete("conversations", null, null)
             delete("deleted_private_messages", null, null)
+            delete(OutboxStore.TABLE, null, null)
             execSQL("DELETE FROM sqlite_sequence WHERE name = 'private_messages'")
         }
         writableDatabase.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { }
@@ -1220,6 +1400,12 @@ internal class ConversationDatabase(
             .forEach { sourceID ->
                 db.update(
                     "private_messages",
+                    ContentValues().apply { put("conversation_id", targetConversationID) },
+                    "conversation_id = ? COLLATE NOCASE",
+                    arrayOf(sourceID)
+                )
+                db.update(
+                    OutboxStore.TABLE,
                     ContentValues().apply { put("conversation_id", targetConversationID) },
                     "conversation_id = ? COLLATE NOCASE",
                     arrayOf(sourceID)
