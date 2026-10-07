@@ -260,7 +260,7 @@ class NostrDirectMessageHandler(
                 ?: FavoritesPersistenceService.shared.findNoiseKey(senderPubkey)
 
             if (noiseKey == null) {
-                Log.w(TAG, "Favorite notification from Nostr sender without known Noise key: ${senderPubkey.take(16)}...")
+                Log.w(TAG, "Favorite notification from Nostr sender without known Noise key: ${com.bitchat.android.util.Redact.id(senderPubkey)}")
                 return false
             }
 

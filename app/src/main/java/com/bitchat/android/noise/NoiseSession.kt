@@ -70,21 +70,26 @@ class NoiseSession(
             val newReplayWindow = replayWindow.copyOf()
             
             if (receivedNonce > highestReceivedNonce) {
-                val shift = (receivedNonce - highestReceivedNonce).toInt()
+                // Compare as Long first: a gap >= 2^31 would overflow toInt() and index out of bounds.
+                val gap = receivedNonce - highestReceivedNonce
+                val shift = if (gap >= REPLAY_WINDOW_SIZE) REPLAY_WINDOW_SIZE else gap.toInt()
                 
                 if (shift >= REPLAY_WINDOW_SIZE) {
                     // Clear entire window - shift is too large
                     newReplayWindow.fill(0)
                 } else {
-                    // Shift window right by `shift` bits
+                    // Offset k lives at byte k/8, bit k%8, so advancing the highest nonce by
+                    // `shift` moves every bit to offset+shift (toward higher bits/bytes).
+                    // Iterating downward keeps the in-place update safe.
+                    val bitShift = shift % 8
                     for (i in (REPLAY_WINDOW_BYTES - 1) downTo 0) {
                         val sourceByteIndex = i - shift / 8
                         var newByte = 0
-                        
+
                         if (sourceByteIndex >= 0) {
-                            newByte = (newReplayWindow[sourceByteIndex].toInt() and 0xFF) ushr (shift % 8)
-                            if (sourceByteIndex > 0 && shift % 8 != 0) {
-                                newByte = newByte or ((newReplayWindow[sourceByteIndex - 1].toInt() and 0xFF) shl (8 - shift % 8))
+                            newByte = ((newReplayWindow[sourceByteIndex].toInt() and 0xFF) shl bitShift) and 0xFF
+                            if (sourceByteIndex > 0 && bitShift != 0) {
+                                newByte = newByte or ((newReplayWindow[sourceByteIndex - 1].toInt() and 0xFF) ushr (8 - bitShift))
                             }
                         }
                         
