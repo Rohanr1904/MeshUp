@@ -28,7 +28,7 @@ from tools.release_gate.release_gate import (
 )
 
 
-APPLICATION_ID = "com.bitchat.droid"
+APPLICATION_ID = "io.github.rohanr1904.nearbird"
 
 
 def find_adb() -> str:

@@ -27,7 +27,7 @@ android {
     buildToolsVersion = libs.versions.buildTools.get()
 
     defaultConfig {
-        applicationId = "com.bitchat.droid"
+        applicationId = "io.github.rohanr1904.nearbird"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 39

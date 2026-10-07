@@ -8,9 +8,7 @@ This is the Android implementation of bitchat, fully protocol-compatible with th
 
 [bitchat.free](http://bitchat.free)
 
-[GitHub Releases](https://github.com/permissionlesstech/bitchat-android/releases)
-
-[<img alt="Get it on Google Play" height="60" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"/>](https://play.google.com/store/apps/details?id=com.bitchat.droid)
+[GitHub Releases](https://github.com/Rohanr1904/MeshUp/releases)
 
 ## See it in action
 
@@ -74,8 +72,8 @@ Under GPLv3, anyone who receives the app may obtain, modify and redistribute its
 Requires Android Studio and the Android SDK (API 26+).
 
 ```bash
-git clone https://github.com/permissionlesstech/bitchat-android.git
-cd bitchat-android
+git clone https://github.com/Rohanr1904/MeshUp.git
+cd MeshUp
 ./gradlew assembleDebug
 ```
 

@@ -10,7 +10,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * A trusted location that serves the latest signed universal BitChat APK.
+ * A trusted location that serves the latest signed universal NearBird APK.
  *
  * Sources are tried in order. A source may list compatibility filenames, which
  * are only used when the preferred asset is absent. Adding a mirror should only
@@ -48,12 +48,8 @@ internal object DefaultApkDownloadSources {
             id = GITHUB_ID,
             displayName = "GitHub Releases",
             latestApkUrls = listOf(
-                "https://github.com/permissionlesstech/bitchat-android/releases/latest/" +
-                    "download/bitchat-android-universal.apk",
-                // Releases published before the stable asset-name rollout use
-                // this filename. Remove when supported releases all use the primary URL.
-                "https://github.com/permissionlesstech/bitchat-android/releases/latest/" +
-                    "download/app-universal-release.apk"
+                AppConstants.Release.GITHUB_LATEST_DOWNLOAD_BASE +
+                    AppConstants.Release.UNIVERSAL_APK_ASSET
             )
         )
     )

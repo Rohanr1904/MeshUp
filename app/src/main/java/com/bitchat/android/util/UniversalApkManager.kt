@@ -803,8 +803,10 @@ class UniversalApkManager(
                 return false
             }
 
+            // Current signers only: certificates this app rotated away from are not trusted.
             val ownCerts = signatureDigests(
-                context.packageManager.getPackageInfo(context.packageName, signingFlags())
+                context.packageManager.getPackageInfo(context.packageName, signingFlags()),
+                currentSignersOnly = true
             )
             // Every mirror must serve the same official release-signed APK.
             // The BuildConfig field keeps its historical name for configuration compatibility.
@@ -812,22 +814,16 @@ class UniversalApkManager(
                 BuildConfig.GITHUB_RELEASE_CERT_SHA256
             )
             val trustedCerts = ownCerts + listOfNotNull(pinnedReleaseCert)
-
-            // Debug builds may use a different local signing key, but still
-            // require the downloaded artifact itself to be signed. Production
-            // builds must match either this installation's signing lineage or
-            // the explicitly pinned release certificate.
-            if (BuildConfig.DEBUG && pinnedReleaseCert == null) {
-                Log.w(TAG, "Debug build has no pinned release certificate; accepting signed APK")
-                return true
-            }
-
             if (trustedCerts.isEmpty()) {
                 Log.e(TAG, "No trusted APK signing certificates are configured")
                 return false
             }
 
-            val matches = apkCerts.intersect(trustedCerts).isNotEmpty()
+            val matches = isTrustedApkSigner(
+                apkCerts = apkCerts,
+                ownCerts = ownCerts,
+                pinRaw = BuildConfig.GITHUB_RELEASE_CERT_SHA256
+            )
             if (!matches) {
                 Log.e(TAG, "Signature mismatch!")
                 Log.e(TAG, "Trusted cert(s): $trustedCerts")
@@ -849,10 +845,13 @@ class UniversalApkManager(
         }
     }
 
-    private fun signatureDigests(packageInfo: android.content.pm.PackageInfo): Set<String> {
+    private fun signatureDigests(
+        packageInfo: android.content.pm.PackageInfo,
+        currentSignersOnly: Boolean = false
+    ): Set<String> {
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val signingInfo = packageInfo.signingInfo ?: return emptySet()
-            if (signingInfo.hasMultipleSigners()) {
+            if (currentSignersOnly || signingInfo.hasMultipleSigners()) {
                 signingInfo.apkContentsSigners
             } else {
                 signingInfo.signingCertificateHistory
@@ -869,13 +868,8 @@ class UniversalApkManager(
         }.toSet()
     }
 
-    private fun normalizeCertificateDigest(value: String): String? {
-        return value
-            .replace(":", "")
-            .trim()
-            .lowercase()
-            .takeIf { it.matches(Regex("[a-f0-9]{64}")) }
-    }
+    private fun normalizeCertificateDigest(value: String): String? =
+        normalizeApkPin(value)
 
     /**
      * Delete the cached universal APK.
@@ -1026,4 +1020,24 @@ class UniversalApkManager(
         INSTALLED,
         DOWNLOADED
     }
+}
+
+/** Normalises a configured SHA-256 pin; blank or malformed values count as unset (null). */
+internal fun normalizeApkPin(raw: String?): String? =
+    raw?.replace(":", "")?.trim()?.lowercase()?.takeIf { it.matches(Regex("[a-f0-9]{64}")) }
+
+/**
+ * Whether a downloaded APK's signer set is trusted: it must share a certificate with the
+ * running app's current signers, or match the pinned release certificate when one is set.
+ * No build-type branches; an empty trusted set rejects everything.
+ */
+internal fun isTrustedApkSigner(
+    apkCerts: Set<String>,
+    ownCerts: Set<String>,
+    pinRaw: String?
+): Boolean {
+    if (apkCerts.isEmpty()) return false
+    val trusted = ownCerts + listOfNotNull(normalizeApkPin(pinRaw))
+    if (trusted.isEmpty()) return false
+    return apkCerts.intersect(trusted).isNotEmpty()
 }

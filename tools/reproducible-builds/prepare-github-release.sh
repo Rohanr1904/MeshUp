@@ -23,20 +23,20 @@ required=(
   BUILDINFO.json
   SHA256SUMS
   SHA256SUMS.unsigned
-  bitchat-android-arm64-unsigned.apk
-  bitchat-android-arm64.apk
-  bitchat-android-armv7-unsigned.apk
-  bitchat-android-play-upload.aab
-  bitchat-android-release-unsigned.aab
-  bitchat-android-universal-unsigned.apk
-  bitchat-android-universal.apk
-  bitchat-android-wear-play-upload.aab
-  bitchat-android-wear-release-unsigned.aab
-  bitchat-android-wear-unsigned.apk
-  bitchat-android-wear.apk
-  bitchat-android-x86-unsigned.apk
-  bitchat-android-x86_64-unsigned.apk
-  bitchat-android-x86_64.apk
+  nearbird-arm64-unsigned.apk
+  nearbird-arm64.apk
+  nearbird-armv7-unsigned.apk
+  nearbird-play-upload.aab
+  nearbird-release-unsigned.aab
+  nearbird-universal-unsigned.apk
+  nearbird-universal.apk
+  nearbird-wear-play-upload.aab
+  nearbird-wear-release-unsigned.aab
+  nearbird-wear-unsigned.apk
+  nearbird-wear.apk
+  nearbird-x86-unsigned.apk
+  nearbird-x86_64-unsigned.apk
+  nearbird-x86_64.apk
 )
 for artifact in "${required[@]}"; do
   if [ ! -f "$RELEASE_DIR/$artifact" ]; then
@@ -53,14 +53,14 @@ for artifact_path in "$RELEASE_DIR"/*; do
   artifact="$(basename "$artifact_path")"
   case "$artifact" in
     BUILDINFO.json|SHA256SUMS|SHA256SUMS.unsigned|\
-    bitchat-android-arm64-unsigned.apk|bitchat-android-arm64.apk|\
-    bitchat-android-armv7-unsigned.apk|\
-    bitchat-android-play-upload.aab|bitchat-android-release-unsigned.aab|\
-    bitchat-android-universal-unsigned.apk|bitchat-android-universal.apk|\
-    bitchat-android-wear-play-upload.aab|bitchat-android-wear-release-unsigned.aab|\
-    bitchat-android-wear-unsigned.apk|bitchat-android-wear.apk|\
-    bitchat-android-x86-unsigned.apk|\
-    bitchat-android-x86_64-unsigned.apk|bitchat-android-x86_64.apk)
+    nearbird-arm64-unsigned.apk|nearbird-arm64.apk|\
+    nearbird-armv7-unsigned.apk|\
+    nearbird-play-upload.aab|nearbird-release-unsigned.aab|\
+    nearbird-universal-unsigned.apk|nearbird-universal.apk|\
+    nearbird-wear-play-upload.aab|nearbird-wear-release-unsigned.aab|\
+    nearbird-wear-unsigned.apk|nearbird-wear.apk|\
+    nearbird-x86-unsigned.apk|\
+    nearbird-x86_64-unsigned.apk|nearbird-x86_64.apk)
       ;;
     *)
       echo "error: unexpected release artifact: $artifact" >&2

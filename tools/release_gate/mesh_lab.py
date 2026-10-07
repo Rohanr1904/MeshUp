@@ -2,7 +2,7 @@
 """ADB-driven mesh test orchestrator for two (or more) live devices.
 
 Drives the debug-only TestHookReceiver in the app
-(intent action: com.bitchat.droid.TEST_HOOK) to perform mesh operations:
+(intent action: io.github.rohanr1904.nearbird.TEST_HOOK) to perform mesh operations:
 peer scanning, connect, Noise handshake, DMs, file transfer, broadcast,
 announce, and raw packet injection.
 
@@ -38,7 +38,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 from tools.release_gate.android_lab import APPLICATION_ID, find_adb, run_adb
 
-TEST_HOOK_ACTION = "com.bitchat.droid.TEST_HOOK"
+TEST_HOOK_ACTION = "io.github.rohanr1904.nearbird.TEST_HOOK"
 TEST_HOOK_COMPONENT = f"{APPLICATION_ID}/com.bitchat.android.testhook.TestHookReceiver"
 RESULTS_DIR = "cache/testhook/results"
 DEVICE_TMP_DIR = "/data/local/tmp/meshlab"
