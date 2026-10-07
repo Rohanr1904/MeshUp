@@ -123,6 +123,8 @@ Decision:
 - Phase 3 password rooms go before launch only if password rooms are wanted in v1 (the legacy password check is a stub).
 - **Distribution (2026-10-08):** GitHub Releases plus a website download; **no Play Store**. Consequences: the owner holds the release signing key directly (no Play App Signing, so the key must be backed up securely; losing it prevents updates); the in-app update check and hotspot APK sharing stay (resolves D9); Play-specific forms and policies do not apply, but the privacy policy is still published on the website.
 - **App name (2026-10-08): NearBird.** "MeshUp" was dropped because "Meshup: Make Moments" (Meshup Pte. Ltd., iOS, nearby social radar, May 2026) occupies a close space. A web and GitHub search found no messenger named NearBird (only unrelated bird-watching apps/repos); a formal trademark search and domain check remain before release.
+- **Panic wipe (default, 2026-10-08):** the triple-tap emergency wipe stays instant, with no typed confirmation; D7's typed `reset` applies to the deliberate Profile → Reset identity action only.
+- **Owner preference:** product decisions use the proposed defaults; Claude records and reports them. Legal, irreversible-public and credential actions still need the owner.
 - **Application ID: `io.github.rohanr1904.nearbird`** (permanent once released). Kotlin package names stay `com.bitchat.android` (internal, do-not-touch), as do wire-level identifiers (`bitchat://verify`, BLE UUIDs) for BitChat compatibility (Decision 012).
 Consequences:
 Deferred items stay tracked in `docs/AI_STATUS.md`. The app ID and name are permanent once published, so they need explicit owner answers before the change is made.
