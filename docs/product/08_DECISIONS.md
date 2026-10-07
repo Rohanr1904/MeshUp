@@ -67,3 +67,31 @@ Any architecture/security/protocol decision must:
 3. State trade-offs.
 4. Record compatibility impact.
 5. Record migration/test requirements.
+
+## Decision 011 — Licence: GPLv3 open source
+Date: 2026-10-07 · Decided by: product owner
+Decision:
+MeshUp is distributed under GPLv3 with complete corresponding source, consistent with the inherited `LICENSE.md`.
+Reason:
+The upstream code is GPLv3 (switched from MIT upstream in `fb2bb64`). A proprietary model would require legal clearance first.
+Follow-up:
+`README.md:30` and `PRIVACY_POLICY.md:156` still say "public domain". Correcting those statements is a licence-text change: do it as its own reviewed change (doc 10 stop condition). Decision 010 remains the release gate (dependency licence inventory, notices).
+
+## Decision 012 — Wire-compatible with BitChat in v1 (A1)
+Date: 2026-10-07 · Decided by: product owner
+Decision:
+MeshUp v1 interoperates with existing BitChat iOS/Android clients on the same mesh.
+Consequences:
+Packet formats, BLE UUIDs, packet types and identity/announce formats stay unchanged. Receiver-side or local-policy hardening (replay window, ingress TTL clamp, rate limits) is allowed because it is invisible on the wire. Anything visible on the wire (advertised-ID rotation, new packet types, room key commitments) needs a cross-client design and a decision record.
+
+## Decision 013 — Internet features are opt-in, default OFF (A3)
+Date: 2026-10-07 · Decided by: product owner
+Decision:
+Tor, Nostr relays, geohash channels and location notes do not start until the user enables "Internet features". The default is OFF for new installs.
+Consequences:
+The startup init in `BitchatApplication` must be gated (TARGET R-6). Favourites-over-Nostr delivery works only after opt-in. The behaviour for existing installs (migration of the current always-on behaviour) needs a decision when R-6 is implemented. Verification: no Internet sockets at cold start with the switch OFF.
+
+## Decision 014 — Wear OS out of scope for v1, must keep compiling (A4)
+Date: 2026-10-07 · Decided by: product owner
+Decision:
+No Wear feature work in v1. `:wear:assembleDebug` stays green because `wear/build.gradle.kts` compiles shared sources from `app`.
