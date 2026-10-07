@@ -1,15 +1,15 @@
-# MeshUp Privacy Policy
+# NearBird Privacy Policy
 
 > **DRAFT — not yet published.** Placeholders in `[brackets]` must be filled in, and the text should be reviewed (ideally by a lawyer) before release. It describes the app's behaviour as of `main` on 2026-10-08.
 
 *Last updated: [publication date]*
 
-MeshUp is an offline-first messenger. It lets phones near each other exchange messages over Bluetooth without accounts, phone numbers or servers. This policy explains what the app stores, what it shares, and with whom.
+NearBird is an offline-first messenger. It lets phones near each other exchange messages over Bluetooth without accounts, phone numbers or servers. This policy explains what the app stores, what it shares, and with whom.
 
 ## Summary
 
 - **No account, no phone number, no email.** You choose a display name; that's it.
-- **We (the developers) receive no data from the app.** There are no MeshUp servers, no analytics and no ads.
+- **We (the developers) receive no data from the app.** There are no NearBird servers, no analytics and no ads.
 - **Offline by default.** Bluetooth mesh messaging works with no Internet connection. **Internet features are off until you turn them on** in Settings.
 - **One known exception:** QR-code scanning uses a Google library (ML Kit) that may send anonymous usage statistics to Google, even with Internet features off. See [Third-party components](#third-party-components).
 
@@ -31,7 +31,7 @@ Public mesh messages and room messages are kept in memory only and are gone when
 
 ## What people nearby can see
 
-When MeshUp is running, other MeshUp and bitchat users within Bluetooth range (and, through relaying, a few hops further) can see:
+When NearBird is running, other NearBird and bitchat users within Bluetooth range (and, through relaying, a few hops further) can see:
 
 - Your **display name**.
 - Your **public keys** and a device identifier used by the mesh protocol. These let others recognise your device while you are nearby.
@@ -42,7 +42,7 @@ Your phone also relays other people's messages to help the mesh work. Relayed pr
 
 ## Internet features (off by default)
 
-If you turn on **Internet features** in Settings, MeshUp also uses the Internet:
+If you turn on **Internet features** in Settings, NearBird also uses the Internet:
 
 | Feature | What is sent, and to whom |
 |---|---|
@@ -56,8 +56,8 @@ When you turn Internet features off, the app stops making new Internet connectio
 
 ## Permissions
 
-- **Bluetooth (nearby devices):** to find and talk to nearby MeshUp users.
-- **Location:** Android requires location permission for Bluetooth scanning on some versions. MeshUp does not record your location for Bluetooth. Location is used for location channels only if you turn on Internet features and use that feature.
+- **Bluetooth (nearby devices):** to find and talk to nearby NearBird users.
+- **Location:** Android requires location permission for Bluetooth scanning on some versions. NearBird does not record your location for Bluetooth. Location is used for location channels only if you turn on Internet features and use that feature.
 - **Notifications:** to tell you about new messages.
 - **Battery optimisation exemption (optional):** so the mesh keeps working in the background.
 
@@ -72,17 +72,17 @@ When you turn Internet features off, the app stops making new Internet connectio
 - **Reset identity:** Profile → *Reset identity…* (type `reset` to confirm). This erases your identity, messages and contacts.
 - **Emergency wipe:** triple-tap the app title to instantly erase all data.
 - **Turn Internet features off** at any time in Settings.
-- **Uninstall:** removes all MeshUp data from your device.
+- **Uninstall:** removes all NearBird data from your device.
 
 Because we hold no data about you, there is nothing for us to export or delete on a server.
 
 ## Children
 
-MeshUp does not collect personal information from anyone, including children. [Set the minimum age for your distribution channel, e.g. 13+.]
+NearBird does not collect personal information from anyone, including children. [Set the minimum age for your distribution channel, e.g. 13+.]
 
 ## Source code
 
-MeshUp is free software under the GNU General Public License v3.0. You can review the source code that implements everything described here at [repository URL].
+NearBird is free software under the GNU General Public License v3.0. You can review the source code that implements everything described here at [repository URL].
 
 ## Changes
 
