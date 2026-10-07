@@ -98,3 +98,14 @@ Addendum (2026-10-07, product owner, Phase 1 PR-2):
 Date: 2026-10-07 · Decided by: product owner
 Decision:
 No Wear feature work in v1. `:wear:assembleDebug` stays green because `wear/build.gradle.kts` compiles shared sources from `app`.
+
+## Decision 015 — Phase 2 delivery and identity parameters
+Date: 2026-10-07 · Decided by: product owner
+Decision:
+- D1: a queued message for an absent peer expires to `Failed` after **1 hour** (was 24 h).
+- D2: per-peer queue limit is **200**; overflow becomes `Failed("queue full")`.
+- D3: after hand-off to the mesh with no delivery ACK, resend at **30 s, 1 min, 2 min, 2 min**, then `Failed`.
+- D7: an unreadable identity key is never silently replaced; the user sees a warning with re-verify guidance and is not blocked. Any deliberate identity reset requires typing `reset` to confirm.
+- D4–D6, D8–D11: the proposed defaults in `docs/IMPLEMENTATION_PLAN_PHASE2.md` §6.
+Consequences:
+Short expiry favours honest "Failed" states over long background waits; users retry manually (D5). Values live in `AppConstants` so they can be tuned after physical-device testing (Decision 009).

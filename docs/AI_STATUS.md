@@ -17,6 +17,7 @@ Phase 1 (App shell, identity UX, Internet opt-in): PR-1..PR-4 **merged to main**
 - None. Open items carried forward:
   - **Tor OFF residual (found 2026-10-07, emulator runtime toggle):** after switching Internet OFF, Arti reports stopped but 3 TCP connections to Tor nodes (ports 9001/443) stay ESTABLISHED (>75 s), plus one stale loopback SOCKS socket. Cause CONFIRMED: native `ArtiNative.stop()` (`tools/arti-build/src/lib.rs:434`) only aborts the SOCKS task and intentionally keeps `ARTI_CLIENT` (and its guard channels) alive. New traffic is blocked (gate + no SOCKS listener); no app data flows. Pre-existing upstream behaviour for the legacy Tor toggle. Fix options: process restart on OFF, or native change to drop the TorClient (rebuild libarti_android.so). Owner decision (2026-10-07): **restart prompt now** — Settings shows a restart hint + button when Internet is OFF but was ON earlier in the process (emulator-verified: after restart, zero app sockets). Native fix (drop TorClient in `ArtiNative.stop`) is a follow-up PR with security review.
   - Legacy chat-header nickname edit bypasses `DisplayNameValidator` (follow-up).
+  - From the P2-PR1 security review (pre-existing, low): `NoiseSession` uses two locks (`cipherLock` for decrypt vs `this` for reset/completeHandshake/destroy), and the session fields are not volatile, so a decrypt racing a reset could write a stale `highestReceivedNonce` (DoS only, not replay). The receive side never counts messages, so `needsRekey()` ignores received nonces (`NoiseSession.kt` ~L596).
   - From the P2-PR2 mesh review (pre-existing, security-review H12): `SecurityManager.kt:84-85` and `WifiAwareMeshService.kt:1303` use `ttl >= 7` to grant the fresh-ANNOUNCE dedup exception, so a forged TTL 255 announce still bypasses dedup. The relay clamp (R-5.3) does not cover this ingress check.
   - Legacy header shows channel titles as `##name` (`ui/ChatHeader.kt:703` prefixes `#` to names already stored as `#name`); pre-existing, cosmetic.
   - PR-3 follow-ups: new `meshup_*` strings untranslated (lint MissingTranslation, non-blocking); IME-open layout on Chats not verified (emulator has a hardware keyboard); leaving the Chats tab disposes the legacy ChatScreen composition (state lives in ChatViewModel; input draft/scroll may reset).
@@ -42,9 +43,9 @@ Phase 1 (App shell, identity UX, Internet opt-in): PR-1..PR-4 **merged to main**
 - Physical devices: NOT run
 
 ## Next Action
-1. Working copy is now `C:\dev\MeshUp` (the OneDrive copy is stale from PR-1 onward).
-2. PR-1 and PR-2 pushed as stacked PRs; next PR-3 (app shell + adapters).
-
+1. Phase 2 decisions recorded (Decision 015: D1 1 h, D2 200, D3 30s/1m/2m/2m, D7 type-"reset" confirm; others default).
+2. Merge PR #5 (Rooms tab) once CI is green.
+3. Then Phase 2 Track A (P2-PR1 replay fix, P2-PR2 TTL clamp, P2-PR3 release log stripping).
 
 ## Last Updated
 2026-10-07
