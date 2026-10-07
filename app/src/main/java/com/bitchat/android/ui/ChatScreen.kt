@@ -866,8 +866,11 @@ private fun ChatDialogs(
         )
     }
     
+    // MeshUp: Internet opt-in gate (Decision 013) - location sheets are unreachable while OFF
+    val internetEnabled by com.bitchat.android.meshup.settings.InternetGate.enabled.collectAsStateWithLifecycle()
+
     // Location channels sheet
-    if (showLocationChannelsSheet) {
+    if (showLocationChannelsSheet && internetEnabled) {
         LocationChannelsSheet(
             isPresented = showLocationChannelsSheet,
             onDismiss = onLocationChannelsSheetDismiss,
@@ -877,7 +880,7 @@ private fun ChatDialogs(
     }
     
     // Location notes sheet (extracted to separate presenter)
-    if (showLocationNotesSheet) {
+    if (showLocationNotesSheet && internetEnabled) {
         LocationNotesSheetPresenter(
             viewModel = viewModel,
             onDismiss = onLocationNotesSheetDismiss
