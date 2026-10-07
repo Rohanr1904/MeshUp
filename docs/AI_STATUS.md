@@ -41,9 +41,9 @@ Phase 1 (App shell, identity UX, Internet opt-in): PR-1..PR-4 **merged to main**
 - Physical devices: NOT run
 
 ## Next Action
-1. Working copy is now `C:\dev\MeshUp` (the OneDrive copy is stale from PR-1 onward).
-2. PR-1 and PR-2 pushed as stacked PRs; next PR-3 (app shell + adapters).
-
+1. Phase 2 decisions recorded (Decision 015: D1 1 h, D2 200, D3 30s/1m/2m/2m, D7 type-"reset" confirm; others default).
+2. Merge PR #5 (Rooms tab) once CI is green.
+3. Then Phase 2 Track A (P2-PR1 replay fix, P2-PR2 TTL clamp, P2-PR3 release log stripping).
 
 ## Last Updated
 2026-10-07
