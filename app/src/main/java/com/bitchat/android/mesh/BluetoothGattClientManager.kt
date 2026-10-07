@@ -72,7 +72,7 @@ class BluetoothGattClientManager(
             connectToDevice(device, rssi)
             true
         } else {
-            Log.w(TAG, "connectToAddress: No device for $deviceAddress")
+            Log.w(TAG, "connectToAddress: No device for ${com.bitchat.android.util.Redact.id(deviceAddress)}")
             false
         }
     }
@@ -476,7 +476,7 @@ class BluetoothGattClientManager(
                     }
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     if (status != BluetoothGatt.GATT_SUCCESS) {
-                        Log.w(TAG, "Disconnected from $deviceAddress with error status $status (client)")
+                        Log.w(TAG, "Disconnected from ${com.bitchat.android.util.Redact.id(deviceAddress)} with error status $status (client)")
                     } else {
                         Log.i(TAG, "Disconnected from $deviceAddress (client)")
                     }
@@ -516,7 +516,7 @@ class BluetoothGattClientManager(
                     // Start service discovery only AFTER MTU is set.
                     gatt.discoverServices()
                 } else {
-                    Log.w(TAG, "MTU negotiation failed for $deviceAddress with status: $status. Disconnecting.")
+                    Log.w(TAG, "MTU negotiation failed for ${com.bitchat.android.util.Redact.id(deviceAddress)} with status: $status. Disconnecting.")
                     //connectionTracker.removePendingConnection(deviceAddress)
                     gatt.disconnect()
                 }
@@ -548,19 +548,19 @@ class BluetoothGattClientManager(
                                     delegate?.onDeviceConnected(device)
                                 }
                             } else {
-                                Log.e(TAG, "Client: CCCD descriptor not found for $deviceAddress")
+                                Log.e(TAG, "Client: CCCD descriptor not found for ${com.bitchat.android.util.Redact.id(deviceAddress)}")
                                 gatt.disconnect()
                             }
                         } else {
-                            Log.e(TAG, "Client: Required characteristic not found for $deviceAddress")
+                            Log.e(TAG, "Client: Required characteristic not found for ${com.bitchat.android.util.Redact.id(deviceAddress)}")
                             gatt.disconnect()
                         }
                     } else {
-                        Log.e(TAG, "Client: Required service not found for $deviceAddress")
+                        Log.e(TAG, "Client: Required service not found for ${com.bitchat.android.util.Redact.id(deviceAddress)}")
                         gatt.disconnect()
                     }
                 } else {
-                    Log.e(TAG, "Client: Service discovery failed with status $status for $deviceAddress")
+                    Log.e(TAG, "Client: Service discovery failed with status $status for ${com.bitchat.android.util.Redact.id(deviceAddress)}")
                     gatt.disconnect()
                 }
             }
@@ -591,12 +591,12 @@ class BluetoothGattClientManager(
         try {
             val gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
             if (gatt == null) {
-                Log.e(TAG, "connectGatt returned null for $deviceAddress")
+                Log.e(TAG, "connectGatt returned null for ${com.bitchat.android.util.Redact.id(deviceAddress)}")
                 // keep the pending connection so we can avoid too many reconnections attempts, TODO: needs testing
                 // connectionTracker.removePendingConnection(deviceAddress)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Client: Exception connecting to $deviceAddress: ${e.message}")
+            Log.e(TAG, "Client: Exception connecting to ${com.bitchat.android.util.Redact.id(deviceAddress)}: ${e.message}")
             // keep the pending connection so we can avoid too many reconnections attempts, TODO: needs testing
             // connectionTracker.removePendingConnection(deviceAddress)
         }

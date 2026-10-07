@@ -1,5 +1,6 @@
 package com.bitchat.android.mesh
 
+import com.bitchat.android.util.Redact
 import android.util.Log
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -56,8 +57,8 @@ class PeerFingerprintManager private constructor() {
         val fingerprint = calculateFingerprint(publicKey)
 
         if (existingFingerprint != null && existingFingerprint != fingerprint) {
-            Log.w(TAG, "Fingerprint mismatch for peer $peerID: $existingFingerprint != $fingerprint")
-            throw IllegalStateException("Fingerprint mismatch for peer $peerID: $existingFingerprint != $fingerprint")
+            Log.w(TAG, "Fingerprint mismatch for peer ${Redact.id(peerID)}: ${Redact.id(existingFingerprint)} != ${Redact.id(fingerprint)}")
+            throw IllegalStateException("Fingerprint mismatch for peer ${Redact.id(peerID)}: ${Redact.id(existingFingerprint)} != ${Redact.id(fingerprint)}")
         }
         
         // Store bidirectional mapping

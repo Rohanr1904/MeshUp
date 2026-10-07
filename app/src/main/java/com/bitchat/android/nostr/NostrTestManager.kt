@@ -1,5 +1,6 @@
 package com.bitchat.android.nostr
 
+import com.bitchat.android.util.Redact
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.*
@@ -171,7 +172,7 @@ class NostrTestManager(private val context: Context) {
         
         // Subscribe to a test geohash
         nostrClient.subscribeToGeohash("u4pru") { content, senderPubkey, nickname, timestamp ->
-            Log.d(TAG, "📥 Received test geohash message from ${senderPubkey.take(16)}...: $content")
+            Log.d(TAG, "📥 Received test geohash message from ${Redact.id(senderPubkey)}: ${Redact.text(content)}")
             messageReceived = true
         }
         

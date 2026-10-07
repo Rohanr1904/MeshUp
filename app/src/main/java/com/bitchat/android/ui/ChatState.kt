@@ -1,5 +1,6 @@
 package com.bitchat.android.ui
 
+import com.bitchat.android.util.Redact
 import android.util.Log
 import com.bitchat.android.model.BitchatMessage
 import kotlinx.coroutines.CoroutineScope
@@ -282,8 +283,8 @@ class ChatState(
 
     fun setFavoritePeers(favorites: Set<String>) {
         val currentValue = _favoritePeers.value
-        Log.d("ChatState", "setFavoritePeers called with ${favorites.size} favorites: $favorites")
-        Log.d("ChatState", "Current value: $currentValue")
+        Log.d("ChatState", "setFavoritePeers called with ${favorites.size} favorites: ${Redact.ids(favorites)}")
+        Log.d("ChatState", "Current value: ${Redact.ids(currentValue)}")
         Log.d("ChatState", "Values equal: ${currentValue == favorites}")
         Log.d("ChatState", "Setting on thread: ${Thread.currentThread().name}")
         
