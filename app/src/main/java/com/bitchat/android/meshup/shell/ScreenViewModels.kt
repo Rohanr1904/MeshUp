@@ -6,6 +6,7 @@ import com.bitchat.android.meshup.domain.Person
 import com.bitchat.android.meshup.domain.Room
 import com.bitchat.android.meshup.service.MessagingService
 import com.bitchat.android.meshup.service.PeopleService
+import com.bitchat.android.meshup.service.JoinResult
 import com.bitchat.android.meshup.service.RoomService
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -30,12 +31,8 @@ class PeopleViewModel(
 class RoomsViewModel(private val rooms: RoomService) : ViewModel() {
     val state: StateFlow<List<Room>> get() = rooms.rooms
 
-    /** Joins (or re-selects) a room; returns false if rejected. Never passes a password. */
-    fun join(name: String): Boolean {
-        val trimmed = name.trim().removePrefix("#").trim()
-        if (trimmed.isEmpty() || trimmed.any { it.isWhitespace() }) return false
-        return rooms.joinRoom(trimmed)
-    }
+    /** Joins (or re-selects) a public room. Never passes a password. */
+    fun join(name: String): JoinResult = rooms.joinRoom(name)
 
     fun leave(name: String) = rooms.leaveRoom(name)
 }

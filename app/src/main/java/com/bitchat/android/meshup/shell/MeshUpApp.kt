@@ -34,6 +34,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.bitchat.android.meshup.service.JoinResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -232,10 +236,15 @@ private fun PeopleScreen(vm: PeopleViewModel, onOpened: () -> Unit) {
 private fun RoomsScreen(vm: RoomsViewModel, onOpened: () -> Unit) {
     val list by vm.state.collectAsState()
     var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<JoinResult?>(null) }
     val doJoin = {
-        if (vm.join(input)) {
+        val result = vm.join(input)
+        if (result == JoinResult.JOINED) {
             input = ""
+            error = null
             onOpened()
+        } else {
+            error = result
         }
     }
     Column(Modifier.fillMaxSize().testTag("screen_rooms")) {
@@ -246,14 +255,18 @@ private fun RoomsScreen(vm: RoomsViewModel, onOpened: () -> Unit) {
         ) {
             OutlinedTextField(
                 value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
+                onValueChange = { input = it; error = null },
+                modifier = Modifier.weight(1f).testTag("field_room_name"),
                 singleLine = true,
                 label = { Text(stringResource(R.string.meshup_room_name_hint)) },
+                isError = error != null,
+                supportingText = error?.let { e -> { Text(stringResource(e.messageRes())) } },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { doJoin() })
             )
-            Button(onClick = { doJoin() }) { Text(stringResource(R.string.meshup_room_join)) }
+            Button(onClick = { doJoin() }, modifier = Modifier.testTag("button_join")) {
+                Text(stringResource(R.string.meshup_room_join))
+            }
         }
         if (list.isEmpty()) {
             Text(
@@ -264,18 +277,48 @@ private fun RoomsScreen(vm: RoomsViewModel, onOpened: () -> Unit) {
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(list, key = { it.name }) { room ->
+                    val unreadLabel = stringResource(R.string.meshup_room_unread, room.unreadCount)
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { if (vm.join(room.name)) onOpened() }
+                            .testTag("room_${room.name}")
+                            // Password rooms are not supported yet: no open action (Phase 3 / R-4).
+                            .clickable(enabled = !room.isPasswordProtected) {
+                                val result = vm.join(room.name)
+                                if (result == JoinResult.JOINED) onOpened() else error = result
+                            }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        if (room.unreadCount > 0) {
-                            Text(room.unreadCount.toString(), color = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f)) {
+                            Text(room.name, style = MaterialTheme.typography.bodyLarge)
+                            if (room.isPasswordProtected) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Filled.Lock,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 4.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        stringResource(R.string.meshup_room_password_unsupported),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
-                        TextButton(onClick = { vm.leave(room.name) }) {
+                        if (room.unreadCount > 0) {
+                            Text(
+                                room.unreadCount.toString(),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.semantics { contentDescription = unreadLabel }
+                            )
+                        }
+                        TextButton(
+                            onClick = { vm.leave(room.name) },
+                            modifier = Modifier.testTag("leave_${room.name}")
+                        ) {
                             Text(stringResource(R.string.meshup_room_leave))
                         }
                     }
@@ -285,3 +328,8 @@ private fun RoomsScreen(vm: RoomsViewModel, onOpened: () -> Unit) {
     }
 }
 
+private fun JoinResult.messageRes(): Int = when (this) {
+    JoinResult.INVALID_NAME -> R.string.meshup_room_error_invalid
+    JoinResult.PASSWORD_PROTECTED -> R.string.meshup_room_error_password
+    JoinResult.REJECTED, JoinResult.JOINED -> R.string.meshup_room_error_rejected
+}
