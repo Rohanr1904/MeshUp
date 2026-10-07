@@ -56,6 +56,8 @@ class MessageRouterTest {
         ContactDirectory.initialize(context) { mesh }
 
         MessageRouter.disableSchedulerForTesting = true
+        MessageRouter.persistenceOverrideForTesting = FakeOutboxPersistence()
+        MessageRouter.statusSinkOverrideForTesting = { _, _ -> }
         MessageRouter.resetForTesting()
         fakeTime = 1_000_000L
         expired.clear()
@@ -69,6 +71,8 @@ class MessageRouterTest {
     fun tearDown() {
         MessageRouter.resetForTesting()
         MessageRouter.disableSchedulerForTesting = false
+        MessageRouter.persistenceOverrideForTesting = null
+        MessageRouter.statusSinkOverrideForTesting = null
         ContactDirectory.identityManagerProvider = { SecureIdentityStateManager(it) }
     }
 
@@ -130,7 +134,7 @@ class MessageRouterTest {
         peerOffline()
         router.sendPrivate("old message", peerID, "peer", "msg-old")
 
-        fakeTime += 86_400_001L
+        fakeTime += 3_600_001L // D1: 1 h
         router.tickOutbox()
 
         assertEquals(listOf("msg-old"), expired)
@@ -142,20 +146,21 @@ class MessageRouterTest {
     }
 
     @Test
-    fun `outbox cap evicts oldest and preserves order`() {
+    fun `outbox cap rejects new messages without evicting and preserves order`() {
         peerOffline()
-        repeat(101) { i ->
+        repeat(201) { i ->
             router.sendPrivate("content-$i", peerID, "peer", "msg-$i")
         }
 
-        assertEquals(listOf("msg-0"), expired)
+        // D2: the 201st is rejected (Failed "queue full"); nothing is evicted or expired.
+        assertTrue(expired.isEmpty())
 
         peerReady()
         router.onSessionEstablished(peerID)
-        verify(mesh, times(100)).sendPrivateMessage(any(), eq(peerID), any(), any())
-        verify(mesh, times(1)).sendPrivateMessage("content-1", peerID, "peer", "msg-1")
-        verify(mesh, times(1)).sendPrivateMessage("content-100", peerID, "peer", "msg-100")
-        verify(mesh, never()).sendPrivateMessage(eq("content-0"), any(), any(), anyOrNull())
+        verify(mesh, times(200)).sendPrivateMessage(any(), eq(peerID), any(), any())
+        verify(mesh, times(1)).sendPrivateMessage("content-0", peerID, "peer", "msg-0")
+        verify(mesh, times(1)).sendPrivateMessage("content-199", peerID, "peer", "msg-199")
+        verify(mesh, never()).sendPrivateMessage(eq("content-200"), any(), any(), anyOrNull())
     }
 
     @Test
@@ -202,6 +207,9 @@ class MessageRouterTest {
     private fun peerReady() {
         whenever(mesh.getPeerInfo(peerID)).thenReturn(peerInfo(isConnected = true))
         whenever(mesh.hasEstablishedSession(peerID)).thenReturn(true)
+        // Authenticated by the Noise handshake (PeerFingerprintManager).
+        whenever(mesh.getPeerFingerprint(peerID))
+            .thenReturn(ContactIdentityResolver.fingerprintHex(noiseKey))
     }
 
     private fun peerInfo(isConnected: Boolean) = PeerInfo(

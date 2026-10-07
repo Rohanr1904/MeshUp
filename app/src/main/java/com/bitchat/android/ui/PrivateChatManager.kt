@@ -269,6 +269,10 @@ class PrivateChatManager(
         val fingerprint = fingerprintManager.getFingerprintForPeer(peerID)
         if (fingerprint != null) {
             dataManager.addBlockedUser(fingerprint)
+            // MeshUp P2-PR8: never deliver queued/unacknowledged DMs to a blocked peer.
+            try {
+                com.bitchat.android.services.MessageRouter.tryGetInstance()?.dropConversation(peerID)
+            } catch (_: Exception) { }
 
             val peerNickname = getPeerNickname(peerID, meshService)
             val systemMessage = BitchatMessage(

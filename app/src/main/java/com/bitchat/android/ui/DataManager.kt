@@ -15,6 +15,15 @@ class DataManager(private val context: Context) {
     
     companion object {
         private const val TAG = "DataManager"
+
+        /**
+         * Read-only block-list check for non-UI owners (MessageRouter, P2-PR8). Reads the same
+         * persisted set that [addBlockedUser] writes, so it is current even without an instance.
+         */
+        fun isFingerprintBlocked(context: Context, fingerprint: String): Boolean =
+            context.getSharedPreferences("bitchat_prefs", Context.MODE_PRIVATE)
+                .getStringSet("blocked_users", emptySet())
+                ?.any { it.equals(fingerprint, ignoreCase = true) } == true
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences("bitchat_prefs", Context.MODE_PRIVATE)

@@ -66,6 +66,18 @@ internal data class OutboxLoadResult(
     val corrupt: List<CorruptOutboxRow> = emptyList()
 )
 
+/**
+ * Startup reconcile between history and outbox (P2-PR8).
+ * [orphanSendingMessageIds]: own private text rows still `Sending` with no outbox row (a crash
+ * between the history write and the outbox write); the caller marks them Failed.
+ * [droppedOutboxMessageIds]: outbox rows deleted because their history row is gone or already
+ * Delivered/Read.
+ */
+internal data class OutboxReconcileResult(
+    val orphanSendingMessageIds: List<String>,
+    val droppedOutboxMessageIds: List<String>
+)
+
 internal sealed interface OutboxEnqueueResult {
     data object Enqueued : OutboxEnqueueResult
     /** Not written: the conversation (or the whole outbox) already holds [limit] rows. */
@@ -95,15 +107,25 @@ internal class OutboxStore(
     private val perConversationLimit: Int = AppConstants.Router.OUTBOX_PER_PEER_LIMIT,
     private val globalLimit: Int = AppConstants.Router.OUTBOX_GLOBAL_LIMIT
 ) {
+    /**
+     * D2 admission (Decision 015 amendment, P2-PR8): the per-conversation and global limits count
+     * QUEUED rows only and apply only to QUEUED inserts. SENT rows are bounded by the router (own
+     * per-peer cap with silent eviction, and the 1 h D1 lifetime), so they never block a new send.
+     */
     fun enqueue(entry: OutboxEntry): OutboxEnqueueResult {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
-            if (countForLocked(db, entry.conversationId) >= perConversationLimit) {
-                return OutboxEnqueueResult.Overflow(perConversationLimit)
-            }
-            if (DatabaseUtils.queryNumEntries(db, TABLE) >= globalLimit) {
-                return OutboxEnqueueResult.Overflow(globalLimit)
+            if (entry.state == OutboxState.QUEUED) {
+                if (countQueuedForLocked(db, entry.conversationId) >= perConversationLimit) {
+                    return OutboxEnqueueResult.Overflow(perConversationLimit)
+                }
+                if (DatabaseUtils.queryNumEntries(
+                        db, TABLE, "state = ${OutboxState.QUEUED.code}"
+                    ) >= globalLimit
+                ) {
+                    return OutboxEnqueueResult.Overflow(globalLimit)
+                }
             }
             val rowId = db.insertWithOnConflict(
                 TABLE,
@@ -144,6 +166,32 @@ internal class OutboxStore(
         put("last_error_code", lastError.code)
     })
 
+    /**
+     * Re-keys a row: [conversationId] (clear column and payload `to_peer_id`) and/or
+     * [recipientFingerprint] (payload only; re-encrypted under the same AAD). Null leaves a field
+     * unchanged. Returns false when the row is missing or its payload is unreadable.
+     */
+    fun updateRecipient(
+        messageId: String,
+        conversationId: String?,
+        recipientFingerprint: String?
+    ): Boolean {
+        if (conversationId == null && recipientFingerprint == null) return false
+        val db = helper.writableDatabase
+        val envelope = db.query(
+            TABLE, arrayOf("payload"), "message_id = ?", arrayOf(messageId), null, null, null
+        ).use { c -> if (c.moveToFirst()) c.getBlob(0) else null } ?: return false
+        val payload = decodePayload(cipher, messageId, envelope) ?: return false
+        val updated = payload.copy(
+            toPeerId = conversationId ?: payload.toPeerId,
+            recipientFingerprint = recipientFingerprint ?: payload.recipientFingerprint
+        )
+        return update(messageId, ContentValues().apply {
+            if (conversationId != null) put("conversation_id", conversationId)
+            put("payload", encodePayload(cipher, messageId, updated))
+        })
+    }
+
     fun remove(messageId: String): Boolean =
         helper.writableDatabase.delete(TABLE, "message_id = ?", arrayOf(messageId)) > 0
 
@@ -163,6 +211,13 @@ internal class OutboxStore(
 
     fun countFor(conversationId: String): Int =
         countForLocked(helper.readableDatabase, conversationId)
+
+    private fun countQueuedForLocked(db: SQLiteDatabase, conversationId: String): Int =
+        db.rawQuery(
+            "SELECT COUNT(*) FROM $TABLE WHERE conversation_id = ? COLLATE NOCASE " +
+                "AND state = ${OutboxState.QUEUED.code}",
+            arrayOf(conversationId)
+        ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
 
     private fun countForLocked(db: SQLiteDatabase, conversationId: String): Int =
         db.rawQuery(

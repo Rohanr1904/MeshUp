@@ -123,6 +123,17 @@ object MeshServiceHolder {
         val created = UnifiedMeshService(context.applicationContext, bluetooth)
         unifiedMeshService = created
         android.util.Log.i(TAG, "Created new UnifiedMeshService")
+        // MeshUp P2-PR8: process-level owner of the durable DM outbox. Every path that brings up
+        // the mesh (MeshForegroundService.onCreate, MainActivity, notification reply) passes here,
+        // so the router is created and rehydrated once per process (rehydrate is idempotent and
+        // non-blocking: it runs on the router's ordered writer).
+        try {
+            com.bitchat.android.services.MessageRouter
+                .getInstance(context.applicationContext, created)
+                .rehydrate()
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Outbox rehydrate failed to start: ${e.javaClass.simpleName}")
+        }
         return created
     }
 
