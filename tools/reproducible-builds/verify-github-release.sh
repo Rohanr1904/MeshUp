@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TAG="${1:?usage: verify-github-release.sh TAG [--no-rebuild]}"
 MODE="${2:-}"
-REPOSITORY="${BITCHAT_GITHUB_REPOSITORY:-permissionlesstech/bitchat-android}"
+REPOSITORY="${BITCHAT_GITHUB_REPOSITORY:-Rohanr1904/MeshUp}"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -40,20 +40,20 @@ gh release download "$TAG" \
   --pattern 'BITCHAT_BUILDINFO.json' \
   --pattern 'BITCHAT_SHA256SUMS' \
   --pattern 'BITCHAT_SHA256SUMS.unsigned' \
-  --pattern 'bitchat-android-*.apk' \
-  --pattern 'bitchat-android-*.aab'
+  --pattern 'nearbird-*.apk' \
+  --pattern 'nearbird-*.aab'
 
 attested_artifacts=(
   BITCHAT_BUILDINFO.json
   BITCHAT_SHA256SUMS.unsigned
-  bitchat-android-arm64-unsigned.apk
-  bitchat-android-armv7-unsigned.apk
-  bitchat-android-release-unsigned.aab
-  bitchat-android-universal-unsigned.apk
-  bitchat-android-wear-release-unsigned.aab
-  bitchat-android-wear-unsigned.apk
-  bitchat-android-x86-unsigned.apk
-  bitchat-android-x86_64-unsigned.apk
+  nearbird-arm64-unsigned.apk
+  nearbird-armv7-unsigned.apk
+  nearbird-release-unsigned.aab
+  nearbird-universal-unsigned.apk
+  nearbird-wear-release-unsigned.aab
+  nearbird-wear-unsigned.apk
+  nearbird-x86-unsigned.apk
+  nearbird-x86_64-unsigned.apk
 )
 for artifact in "${attested_artifacts[@]}"; do
   if [ ! -f "$DOWNLOAD_DIR/$artifact" ]; then

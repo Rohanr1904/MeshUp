@@ -66,16 +66,16 @@ export BITCHAT_GITHUB_KEYSTORE_PASSWORD
 export BITCHAT_GITHUB_KEY_PASSWORD
 
 unsigned_names=(
-  "bitchat-android-arm64-unsigned.apk"
-  "bitchat-android-universal-unsigned.apk"
-  "bitchat-android-wear-unsigned.apk"
-  "bitchat-android-x86_64-unsigned.apk"
+  "nearbird-arm64-unsigned.apk"
+  "nearbird-universal-unsigned.apk"
+  "nearbird-wear-unsigned.apk"
+  "nearbird-x86_64-unsigned.apk"
 )
 signed_names=(
-  "bitchat-android-arm64.apk"
-  "bitchat-android-universal.apk"
-  "bitchat-android-wear.apk"
-  "bitchat-android-x86_64.apk"
+  "nearbird-arm64.apk"
+  "nearbird-universal.apk"
+  "nearbird-wear.apk"
+  "nearbird-x86_64.apk"
 )
 
 for ((index = 0; index < ${#unsigned_names[@]}; index++)); do

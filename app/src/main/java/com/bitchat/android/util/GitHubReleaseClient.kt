@@ -36,19 +36,18 @@ internal class GitHubReleaseClient(
 ) : LatestReleaseProvider {
     companion object {
         private const val TAG = "GitHubRelease"
-        private const val GITHUB_API_URL =
-            "https://api.github.com/repos/permissionlesstech/bitchat-android/releases/latest"
+        private const val GITHUB_API_URL = AppConstants.Release.GITHUB_API_LATEST_URL
         private const val ROUTE_READY_TIMEOUT_MILLIS = 60_000L
         private const val CACHE_TTL_MILLIS = 30 * 60_000L
         private const val PREFS_NAME = "apk_release_metadata"
         private const val RATE_LIMIT_SCOPE = "github_release_metadata"
-        private const val USER_AGENT = "BitChat-Android"
+        private const val USER_AGENT = "NearBird-Android"
 
         private val SOURCE = ApkDownloadSource(
             id = DefaultApkDownloadSources.GITHUB_ID,
             displayName = "GitHub Releases",
-            latestApkUrl = "https://github.com/permissionlesstech/bitchat-android/releases/latest/" +
-                "download/bitchat-android-universal.apk"
+            latestApkUrl = AppConstants.Release.GITHUB_LATEST_DOWNLOAD_BASE +
+                AppConstants.Release.UNIVERSAL_APK_ASSET
         )
 
         internal fun parseRelease(jsonString: String): Release? = runCatching {

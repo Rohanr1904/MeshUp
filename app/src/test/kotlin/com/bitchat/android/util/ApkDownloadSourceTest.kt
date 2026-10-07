@@ -24,14 +24,9 @@ class ApkDownloadSourceTest {
     @Test
     fun `default source downloads the stable latest universal asset directly`() {
         assertEquals(
-            "https://github.com/permissionlesstech/bitchat-android/releases/latest/" +
-                "download/bitchat-android-universal.apk",
-            DefaultApkDownloadSources.all.single().latestApkUrls.first()
-        )
-        assertEquals(
-            "https://github.com/permissionlesstech/bitchat-android/releases/latest/" +
-                "download/app-universal-release.apk",
-            DefaultApkDownloadSources.all.single().latestApkUrls[1]
+            "https://github.com/Rohanr1904/MeshUp/releases/latest/" +
+                "download/nearbird-universal.apk",
+            DefaultApkDownloadSources.all.single().latestApkUrls.single()
         )
     }
 
