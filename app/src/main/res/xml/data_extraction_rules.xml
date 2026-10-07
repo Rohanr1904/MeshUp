@@ -3,9 +3,15 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="bitchat_prefs.xml"/>
         <exclude domain="sharedpref" path="bitchat_crypto.xml"/>
+        <exclude domain="sharedpref" path="bitchat_identity.xml"/>
+        <exclude domain="sharedpref" path="bitchat_crypto_secure.xml"/>
+        <exclude domain="sharedpref" path="bitchat_identity_health.xml"/>
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="bitchat_prefs.xml"/>
         <exclude domain="sharedpref" path="bitchat_crypto.xml"/>
+        <exclude domain="sharedpref" path="bitchat_identity.xml"/>
+        <exclude domain="sharedpref" path="bitchat_crypto_secure.xml"/>
+        <exclude domain="sharedpref" path="bitchat_identity_health.xml"/>
     </device-transfer>
 </data-extraction-rules>

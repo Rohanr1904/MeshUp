@@ -6,6 +6,10 @@ import android.util.Base64
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.bitchat.android.identity.IdentityHealth
+import com.bitchat.android.identity.IdentityIssue
+import com.bitchat.android.identity.IdentityIssueReason
+import com.bitchat.android.identity.IdentityKeyKind
 import com.bitchat.android.noise.NoiseEncryptionService
 import com.bitchat.android.noise.NoiseHandshakeProcessingResult
 import com.bitchat.android.noise.AuthenticatedNoiseSession
@@ -34,6 +38,8 @@ open class EncryptionService(private val context: Context) {
         private const val ED25519_PRIVATE_KEY_PREF = "ed25519_signing_private_key"
         private const val OLD_PREFS_NAME = "bitchat_crypto"
         private const val SECURE_PREFS_NAME = "bitchat_crypto_secure"
+        private const val BACKUP_SUFFIX = "_unreadable_backup"
+        private const val BACKUP_TIME_SUFFIX = "_unreadable_backup_at"
     }
     
     // Core Noise encryption service
@@ -57,12 +63,16 @@ open class EncryptionService(private val context: Context) {
     }
 
     private fun setUpEncryptedPrefs() {
+        prefs = createSecurePrefs()
+    }
+
+    /** Overridable so tests can inject plain or failing preferences. */
+    protected open fun createSecurePrefs(): SharedPreferences {
         val masterKey = MasterKey.Builder(context, MasterKey.DEFAULT_MASTER_KEY_ALIAS)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
-        // Create encrypted shared preferences
-        prefs = EncryptedSharedPreferences.create(
+        return EncryptedSharedPreferences.create(
             context,
             SECURE_PREFS_NAME,
             masterKey,
@@ -70,6 +80,10 @@ open class EncryptionService(private val context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
+
+    /** Overridable so tests can inject the legacy plaintext preferences. */
+    protected open fun legacyPrefs(): SharedPreferences =
+        context.getSharedPreferences(OLD_PREFS_NAME, Context.MODE_PRIVATE)
 
     /**
      * Initialization logic moved to method to allow overriding in tests
@@ -164,12 +178,24 @@ open class EncryptionService(private val context: Context) {
      * Clear persistent identity (for panic mode)
      */
     fun clearPersistentIdentity() {
+        runCatching { IdentityHealth.reset(context) } // never let this block the identity wipe
         noiseService.clearPersistentIdentity()
         establishedSessions.clear()
+
+        // The legacy plaintext prefs must not survive a wipe: it would be re-imported as the identity.
+        try {
+            legacyPrefs().edit().clear().commit()
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Could not clear legacy prefs: ${e.javaClass.simpleName}")
+        }
         
         // Clear Ed25519 signing key from preferences
         try {
-            prefs.edit { remove(ED25519_PRIVATE_KEY_PREF) }
+            prefs.edit {
+                remove(ED25519_PRIVATE_KEY_PREF)
+                remove(ED25519_PRIVATE_KEY_PREF + BACKUP_SUFFIX)
+                remove(ED25519_PRIVATE_KEY_PREF + BACKUP_TIME_SUFFIX)
+            }
             Log.d(TAG, "🗑️ Cleared Ed25519 signing keys from preferences")
 
             // Generate new keys immediately
@@ -435,69 +461,128 @@ open class EncryptionService(private val context: Context) {
     
     // MARK: - Private Key Management
     
-    /**
-     * Load existing Ed25519 key pair from preferences or create a new one
-     */
-    private fun loadOrCreateEd25519KeyPair(): AsymmetricCipherKeyPair {
-        // Migrate legacy plaintext Ed25519 key to encrypted storage if present
-        migrateOldEd25519KeyIfNeeded()
-        try {
-            val storedKey = prefs.getString(ED25519_PRIVATE_KEY_PREF, null)
-
-            if (storedKey != null) {
-                // Load existing key
-                val privateKeyBytes = Base64.decode(storedKey, Base64.DEFAULT)
-                val privateKey = Ed25519PrivateKeyParameters(privateKeyBytes, 0)
-                val publicKey = privateKey.generatePublicKey()
-                Log.d(TAG, "✅ Loaded existing Ed25519 signing key pair")
-                return AsymmetricCipherKeyPair(publicKey, privateKey)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠️ Failed to load existing Ed25519 key, creating new one: ${e.message}")
-        }
-        
-        // Create new key pair
-        return generateAndSaveEd25519KeyPair()
+    /** Result of reading the encrypted Ed25519 pref. */
+    private sealed class StoredRead {
+        object Absent : StoredRead()
+        class Raw(val value: String) : StoredRead()
+        object Unreadable : StoredRead()
     }
 
-    fun generateAndSaveEd25519KeyPair(): AsymmetricCipherKeyPair {
+    private fun readEncrypted(): StoredRead = try {
+        prefs.getString(ED25519_PRIVATE_KEY_PREF, null)?.let { StoredRead.Raw(it) } ?: StoredRead.Absent
+    } catch (e: Exception) {
+        Log.w(TAG, "⚠️ Stored Ed25519 key could not be read: ${e.javaClass.simpleName}")
+        StoredRead.Unreadable
+    }
+
+    private fun readLegacy(): String? = try {
+        legacyPrefs().getString(ED25519_PRIVATE_KEY_PREF, null)
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun deleteLegacy() {
+        try {
+            legacyPrefs().edit().remove(ED25519_PRIVATE_KEY_PREF).commit()
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Could not remove legacy Ed25519 key: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun parseEd25519(encoded: String): AsymmetricCipherKeyPair? = try {
+        val privateKey = Ed25519PrivateKeyParameters(Base64.decode(encoded, Base64.DEFAULT), 0)
+        AsymmetricCipherKeyPair(privateKey.generatePublicKey(), privateKey)
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * Load the Ed25519 key pair. Absent (first run, no legacy key) silently creates one. The legacy
+     * plaintext copy is deleted only after an encrypted value has loaded (or been written from it), so a
+     * readable legacy key can recover an unreadable encrypted value without any reset event. A stored
+     * value that cannot be read is backed up unchanged and reported before it is replaced.
+     */
+    private fun loadOrCreateEd25519KeyPair(): AsymmetricCipherKeyPair {
+        val enc = readEncrypted()
+        (enc as? StoredRead.Raw)?.let { raw -> parseEd25519(raw.value) }?.let { pair ->
+            Log.d(TAG, "✅ Loaded existing Ed25519 signing key pair")
+            deleteLegacy()
+            return pair
+        }
+
+        val legacyRaw = readLegacy()
+        val legacyPair = legacyRaw?.let { parseEd25519(it) }
+        if (legacyPair != null) {
+            // Recover the identity from the legacy copy; keep any unreadable encrypted value as a backup.
+            if (enc is StoredRead.Raw) backupUnreadableEd25519Key(enc.value)
+            val saved = try {
+                prefs.edit().putString(ED25519_PRIVATE_KEY_PREF, legacyRaw).commit()
+            } catch (e: Exception) {
+                false
+            }
+            if (saved) {
+                Log.d(TAG, "🔁 Migrated Ed25519 key to EncryptedSharedPreferences")
+                deleteLegacy()
+            }
+            return legacyPair
+        }
+
+        if (enc is StoredRead.Absent && legacyRaw == null) {
+            return generateAndSaveEd25519(deleteLegacyOnSave = false).first
+        }
+
+        // Something is stored but unusable.
+        val backedUp = backupUnreadableEd25519Key((enc as? StoredRead.Raw)?.value ?: legacyRaw)
+        IdentityHealth.report(
+            IdentityIssue(IdentityIssueReason.UNREADABLE, IdentityKeyKind.ED25519_SIGNING, backedUp), context
+        )
+        return generateAndSaveEd25519(deleteLegacyOnSave = true).first
+    }
+
+    /**
+     * Keeps the FIRST backup (never overwrites an existing one). Returns true if a backup exists or was
+     * written; false if there was nothing readable to copy or the write failed. Never throws.
+     */
+    private fun backupUnreadableEd25519Key(raw: String?): Boolean {
+        return try {
+            if (prefs.contains(ED25519_PRIVATE_KEY_PREF + BACKUP_SUFFIX)) return true
+            if (raw == null) return false
+            prefs.edit()
+                .putString(ED25519_PRIVATE_KEY_PREF + BACKUP_SUFFIX, raw)
+                .putLong(ED25519_PRIVATE_KEY_PREF + BACKUP_TIME_SUFFIX, System.currentTimeMillis())
+                .commit()
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Could not back up unreadable Ed25519 key: ${e.javaClass.simpleName}")
+            false
+        }
+    }
+
+    fun generateAndSaveEd25519KeyPair(): AsymmetricCipherKeyPair =
+        generateAndSaveEd25519(deleteLegacyOnSave = false).first
+
+    private fun generateAndSaveEd25519(deleteLegacyOnSave: Boolean): Pair<AsymmetricCipherKeyPair, Boolean> {
         val keyGen = Ed25519KeyPairGenerator()
         keyGen.init(Ed25519KeyGenerationParameters(SecureRandom()))
         val keyPair = keyGen.generateKeyPair()
 
-        // Store private key in preferences
+        var persisted = false
         try {
             val privateKey = keyPair.private as Ed25519PrivateKeyParameters
-            val privateKeyBytes = privateKey.encoded
-            val encodedKey = Base64.encodeToString(privateKeyBytes, Base64.DEFAULT)
-
-            prefs.edit { putString(ED25519_PRIVATE_KEY_PREF, encodedKey) }
+            val encodedKey = Base64.encodeToString(privateKey.encoded, Base64.DEFAULT)
+            persisted = prefs.edit().putString(ED25519_PRIVATE_KEY_PREF, encodedKey).commit()
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to store Ed25519 private key: ${e.javaClass.simpleName}")
+        }
+        if (persisted) {
             Log.d(TAG, "✅ Created and stored new Ed25519 signing key pair")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to store Ed25519 private key: ${e.message}")
+            // The encrypted pref now holds a key, so the plaintext copy must not linger.
+            if (deleteLegacyOnSave) deleteLegacy()
+        } else {
+            // Keep using the in-memory key this session, but make the failure visible.
+            IdentityHealth.report(
+                IdentityIssue(IdentityIssueReason.NOT_PERSISTED, IdentityKeyKind.ED25519_SIGNING), context
+            )
         }
-        
-        return keyPair
-    }
-
-    private fun migrateOldEd25519KeyIfNeeded() {
-        try {
-            // old existing plain text preference
-            val oldPrefs = context.getSharedPreferences(OLD_PREFS_NAME, Context.MODE_PRIVATE)
-
-            val oldKey = oldPrefs.getString(ED25519_PRIVATE_KEY_PREF, null)
-
-            if (oldKey != null && !prefs.contains(ED25519_PRIVATE_KEY_PREF)) {
-                prefs.edit {
-                    putString(ED25519_PRIVATE_KEY_PREF, oldKey)
-                }
-                oldPrefs.edit {
-                    remove(ED25519_PRIVATE_KEY_PREF)
-                }
-                Log.d(TAG, "🔁 Migrated Ed25519 key to EncryptedSharedPreferences")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠️ Failed to migrate Ed25519 key; generating new identity: ${e.message}")
-        }
+        return Pair(keyPair, persisted)
     }
 }

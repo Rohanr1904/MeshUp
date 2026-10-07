@@ -17,10 +17,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +41,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitchat.android.R
+import com.bitchat.android.identity.IdentityHealth
 import com.bitchat.android.meshup.profile.DisplayNameValidator.Reason
 import com.bitchat.android.meshup.profile.ProfileManager
 
@@ -104,6 +107,11 @@ fun ProfileScreen(profile: ProfileManager) {
     val settingsVm = viewModel { SettingsViewModel() }
     val internet by settingsVm.internetEnabled.collectAsState()
     val context = LocalContext.current
+    remember { IdentityHealth.attach(context) }
+    val identityVm = viewModel { IdentityViewModel(reset = profile::resetIdentity) }
+    val banner by identityVm.banner.collectAsState(initial = null)
+    val backupKept by identityVm.backupKept.collectAsState(initial = false)
+    var confirmingReset by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -113,6 +121,7 @@ fun ProfileScreen(profile: ProfileManager) {
             .testTag("screen_profile"),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        banner?.let { IdentityBanner(it, backupKept, onGotIt = identityVm::acknowledge) }
         Text(stringResource(R.string.meshup_profile_display_name), style = MaterialTheme.typography.labelMedium)
         if (editing) {
             // Fresh editor each time editing starts, prefilled with the current name.
@@ -189,6 +198,21 @@ fun ProfileScreen(profile: ProfileManager) {
             ) { Text(stringResource(R.string.meshup_settings_restart_button)) }
         }
 
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        TextButton(
+            onClick = { identityVm.clearResetText(); confirmingReset = true },
+            modifier = Modifier.testTag("profile_reset_identity")
+        ) {
+            Text(stringResource(R.string.meshup_identity_reset_button), color = MaterialTheme.colorScheme.error)
+        }
+        if (confirmingReset) {
+            ResetIdentityDialog(
+                vm = identityVm,
+                onDismiss = { confirmingReset = false },
+                onConfirmed = { confirmingReset = false }
+            )
+        }
+
         Text(
             stringResource(R.string.meshup_settings_battery_title),
             style = MaterialTheme.typography.titleMedium,
@@ -201,6 +225,70 @@ fun ProfileScreen(profile: ProfileManager) {
             Text(stringResource(R.string.meshup_settings_power_saver))
         }
     }
+}
+
+/** Non-blocking warning shown on Profile when an identity key could not be loaded or saved. */
+@Composable
+fun IdentityBanner(kind: IdentityBannerKind, backupKept: Boolean, onGotIt: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier.fillMaxWidth().testTag("identity_banner")
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(
+                    when (kind) {
+                        IdentityBannerKind.UNREADABLE -> R.string.meshup_identity_banner_unreadable
+                        IdentityBannerKind.NOT_PERSISTED -> R.string.meshup_identity_banner_not_persisted
+                    }
+                ),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (kind == IdentityBannerKind.UNREADABLE && backupKept) {
+                Text(
+                    stringResource(R.string.meshup_identity_banner_backup_kept),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            TextButton(onClick = onGotIt, modifier = Modifier.testTag("identity_banner_got_it")) {
+                Text(stringResource(R.string.meshup_identity_banner_got_it))
+            }
+        }
+    }
+}
+
+/** Confirm stays disabled until the user types `reset`. Confirming runs the existing panic wipe. */
+@Composable
+fun ResetIdentityDialog(vm: IdentityViewModel, onDismiss: () -> Unit, onConfirmed: () -> Unit) {
+    val text by vm.resetText.collectAsState()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.meshup_identity_reset_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.meshup_identity_reset_body))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = vm::onResetTextChange,
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.meshup_identity_reset_type_hint)) },
+                    modifier = Modifier.fillMaxWidth().testTag("identity_reset_field")
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (vm.confirmReset()) onConfirmed() },
+                enabled = vm.canConfirmReset(text),
+                modifier = Modifier.testTag("identity_reset_confirm")
+            ) { Text(stringResource(R.string.meshup_identity_reset_confirm)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.meshup_identity_reset_cancel)) }
+        }
+    )
 }
 
 /** Opens a system settings screen; falls back to the app details page if none can handle it. */

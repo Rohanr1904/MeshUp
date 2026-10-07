@@ -21,6 +21,13 @@ import androidx.core.content.edit
  * - Secure storage using Android EncryptedSharedPreferences
  * - Fingerprint calculation and identity validation
  */
+/** Outcome of reading a stored key pair: distinguishes "never stored" from "stored but unusable". */
+sealed class KeyLoadResult {
+    class Loaded(val privateKey: ByteArray, val publicKey: ByteArray) : KeyLoadResult()
+    object Absent : KeyLoadResult()
+    class Unreadable(val reason: String) : KeyLoadResult()
+}
+
 class SecureIdentityStateManager {
     
     companion object {
@@ -30,6 +37,8 @@ class SecureIdentityStateManager {
         private const val KEY_STATIC_PUBLIC_KEY = "static_public_key"
         private const val KEY_SIGNING_PRIVATE_KEY = "signing_private_key"
         private const val KEY_SIGNING_PUBLIC_KEY = "signing_public_key"
+        internal const val BACKUP_SUFFIX = "_unreadable_backup"
+        internal const val BACKUP_TIME_SUFFIX = "_unreadable_backup_at"
         private const val KEY_VERIFIED_FINGERPRINTS = "verified_fingerprints"
         private const val KEY_CACHED_PEER_FINGERPRINTS = "cached_peer_fingerprints"
         private const val KEY_CACHED_PEER_NOISE_KEYS = "cached_peer_noise_keys"
@@ -84,36 +93,79 @@ class SecureIdentityStateManager {
      * Load saved static key pair
      * Returns (privateKey, publicKey) or null if none exists
      */
-    fun loadStaticKey(): Pair<ByteArray, ByteArray>? {
+    fun loadStaticKey(): Pair<ByteArray, ByteArray>? =
+        (loadStaticKeyResult() as? KeyLoadResult.Loaded)?.let { Pair(it.privateKey, it.publicKey) }
+
+    /** Absent only when neither half is stored; a partial, undecryptable or malformed pair is Unreadable. */
+    fun loadStaticKeyResult(): KeyLoadResult = loadPair(KEY_STATIC_PRIVATE_KEY, KEY_STATIC_PUBLIC_KEY, "static")
+
+    private fun loadPair(privName: String, pubName: String, label: String): KeyLoadResult {
         return try {
-            val privateKeyString = prefs.getString(KEY_STATIC_PRIVATE_KEY, null)
-            val publicKeyString = prefs.getString(KEY_STATIC_PUBLIC_KEY, null)
-            
-            if (privateKeyString != null && publicKeyString != null) {
-                val privateKey = android.util.Base64.decode(privateKeyString, android.util.Base64.DEFAULT)
-                val publicKey = android.util.Base64.decode(publicKeyString, android.util.Base64.DEFAULT)
-                
-                // Validate key sizes
-                if (privateKey.size == 32 && publicKey.size == 32) {
-                    Log.d(TAG, "Loaded static identity key from secure storage")
-                    Pair(privateKey, publicKey)
-                } else {
-                    Log.w(TAG, "Invalid key sizes in storage, returning null")
-                    null
-                }
+            val privateKeyString = prefs.getString(privName, null)
+            val publicKeyString = prefs.getString(pubName, null)
+            if (privateKeyString == null && publicKeyString == null) {
+                Log.d(TAG, "No $label identity key found in storage")
+                return KeyLoadResult.Absent
+            }
+            if (privateKeyString == null || publicKeyString == null) {
+                return KeyLoadResult.Unreadable("incomplete $label key pair")
+            }
+            val privateKey = Base64.decode(privateKeyString, Base64.DEFAULT)
+            val publicKey = Base64.decode(publicKeyString, Base64.DEFAULT)
+            if (privateKey.size == 32 && publicKey.size == 32) {
+                Log.d(TAG, "Loaded $label identity key from secure storage")
+                KeyLoadResult.Loaded(privateKey, publicKey)
             } else {
-                Log.d(TAG, "No static identity key found in storage")
-                null
+                KeyLoadResult.Unreadable("invalid $label key sizes")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load static key: ${e.message}")
-            null
+            Log.e(TAG, "Failed to load $label key: ${e.javaClass.simpleName}")
+            KeyLoadResult.Unreadable("$label key could not be read")
         }
     }
-    
+
     /**
-     * Save static key pair to secure storage
+     * Backs up the stored (unreadable) values of [names] as one unit: each value is copied unchanged to
+     * `<name>_unreadable_backup` with a `<name>_unreadable_backup_at` timestamp. The FIRST backup is
+     * kept: if any backup of this pair already exists, nothing is overwritten (so a pair never mixes
+     * halves from different events) and true is returned. Originals are never deleted and backups are
+     * never removed automatically. Returns true only if every stored half was copied and committed;
+     * false if a stored value could not be read (e.g. failed decryption) or the write failed. Never throws.
      */
+    @SuppressLint("UseKtx")
+    private fun backupUnreadable(vararg names: String): Boolean {
+        return try {
+            if (names.any { prefs.contains(it + BACKUP_SUFFIX) }) return true
+            val editor = prefs.edit()
+            var any = false
+            var allCopied = true
+            for (name in names) {
+                if (!prefs.contains(name)) continue
+                val raw = try { prefs.getString(name, null) } catch (e: Exception) { null }
+                if (raw == null) {
+                    allCopied = false
+                    continue
+                }
+                editor.putString(name + BACKUP_SUFFIX, raw)
+                editor.putLong(name + BACKUP_TIME_SUFFIX, System.currentTimeMillis())
+                any = true
+            }
+            if (!any) return false
+            editor.commit() && allCopied
+        } catch (e: Exception) {
+            Log.w(TAG, "Unreadable identity backup failed: ${e.javaClass.simpleName}")
+            false
+        }
+    }
+
+    fun backupUnreadableStaticKey(): Boolean = backupUnreadable(KEY_STATIC_PRIVATE_KEY, KEY_STATIC_PUBLIC_KEY)
+
+    fun backupUnreadableSigningKey(): Boolean = backupUnreadable(KEY_SIGNING_PRIVATE_KEY, KEY_SIGNING_PUBLIC_KEY)
+
+    /**
+     * Save static key pair to secure storage. Throws if the write could not be committed.
+     */
+    @SuppressLint("UseKtx")
     fun saveStaticKey(privateKey: ByteArray, publicKey: ByteArray) {
         try {
             // Validate key sizes
@@ -124,10 +176,11 @@ class SecureIdentityStateManager {
             val privateKeyString = android.util.Base64.encodeToString(privateKey, android.util.Base64.DEFAULT)
             val publicKeyString = android.util.Base64.encodeToString(publicKey, android.util.Base64.DEFAULT)
             
-            prefs.edit()
+            val committed = prefs.edit()
                 .putString(KEY_STATIC_PRIVATE_KEY, privateKeyString)
                 .putString(KEY_STATIC_PUBLIC_KEY, publicKeyString)
-                .apply()
+                .commit()
+            if (!committed) throw java.io.IOException("Identity key commit failed")
             
             Log.d(TAG, "Saved static identity key to secure storage")
         } catch (e: Exception) {
@@ -142,36 +195,16 @@ class SecureIdentityStateManager {
      * Load saved signing key pair
      * Returns (privateKey, publicKey) or null if none exists
      */
-    fun loadSigningKey(): Pair<ByteArray, ByteArray>? {
-        return try {
-            val privateKeyString = prefs.getString(KEY_SIGNING_PRIVATE_KEY, null)
-            val publicKeyString = prefs.getString(KEY_SIGNING_PUBLIC_KEY, null)
-            
-            if (privateKeyString != null && publicKeyString != null) {
-                val privateKey = android.util.Base64.decode(privateKeyString, android.util.Base64.DEFAULT)
-                val publicKey = android.util.Base64.decode(publicKeyString, android.util.Base64.DEFAULT)
-                
-                // Validate key sizes
-                if (privateKey.size == 32 && publicKey.size == 32) {
-                    Log.d(TAG, "Loaded Ed25519 signing key from secure storage")
-                    Pair(privateKey, publicKey)
-                } else {
-                    Log.w(TAG, "Invalid signing key sizes in storage, returning null")
-                    null
-                }
-            } else {
-                Log.d(TAG, "No Ed25519 signing key found in storage")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load signing key: ${e.message}")
-            null
-        }
-    }
+    fun loadSigningKey(): Pair<ByteArray, ByteArray>? =
+        (loadSigningKeyResult() as? KeyLoadResult.Loaded)?.let { Pair(it.privateKey, it.publicKey) }
+
+    /** Absent only when neither half is stored; a partial, undecryptable or malformed pair is Unreadable. */
+    fun loadSigningKeyResult(): KeyLoadResult = loadPair(KEY_SIGNING_PRIVATE_KEY, KEY_SIGNING_PUBLIC_KEY, "signing")
 
     /**
-     * Save signing key pair to secure storage
+     * Save signing key pair to secure storage. Throws if the write could not be committed.
      */
+    @SuppressLint("UseKtx")
     fun saveSigningKey(privateKey: ByteArray, publicKey: ByteArray) {
         try {
             // Validate key sizes
@@ -182,10 +215,11 @@ class SecureIdentityStateManager {
             val privateKeyString = android.util.Base64.encodeToString(privateKey, android.util.Base64.DEFAULT)
             val publicKeyString = android.util.Base64.encodeToString(publicKey, android.util.Base64.DEFAULT)
             
-            prefs.edit()
+            val committed = prefs.edit()
                 .putString(KEY_SIGNING_PRIVATE_KEY, privateKeyString)
                 .putString(KEY_SIGNING_PUBLIC_KEY, publicKeyString)
-                .apply()
+                .commit()
+            if (!committed) throw java.io.IOException("Identity key commit failed")
             
             Log.d(TAG, "Saved Ed25519 signing key to secure storage")
         } catch (e: Exception) {
