@@ -31,4 +31,6 @@ class FakeLegacyChatSource : LegacyChatSource {
     override suspend fun startPrivateChat(peerId: String) { started += peerId }
     override fun setNickname(name: String) { nicknamesSet += name; nickname.value = name }
     override fun myFingerprint() = fingerprint
+    var panicClears = 0
+    override fun panicClearAllData() { panicClears++ }
 }

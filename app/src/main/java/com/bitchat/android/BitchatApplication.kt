@@ -12,6 +12,7 @@ class BitchatApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        runCatching { com.bitchat.android.identity.IdentityHealth.attach(this) }
 
         // MeshUp: Internet opt-in gate (Decision 013) - must be bound before any component that can
         // open a network connection. Fail-closed (OFF) if reading the setting fails.

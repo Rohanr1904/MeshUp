@@ -39,6 +39,9 @@ class ProfileManager(
     /** First 16 hex chars of our identity fingerprint in groups of four; empty if unavailable. */
     fun shortFingerprint(): String = formatFingerprint(runCatching { source.myFingerprint() }.getOrDefault(""))
 
+    /** Deliberate identity reset: delegates to the existing panic wipe (no separate mechanism). */
+    fun resetIdentity() = source.panicClearAllData()
+
     companion object {
         fun formatFingerprint(full: String): String =
             full.filter { it.isLetterOrDigit() }.take(16).chunked(4).joinToString(" ").uppercase()

@@ -32,6 +32,8 @@ class AndroidTestChatSource(initialNickname: String = "anon1234") : LegacyChatSo
         nickname.value = name
     }
     override fun myFingerprint() = "0123456789abcdef0123456789abcdef"
+    var panicClears = 0
+    override fun panicClearAllData() { panicClears++ }
 
     companion object {
         /** Fresh profile on cleared prefs; [confirmed] pre-sets the name-confirmed flag. */

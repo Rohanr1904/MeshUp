@@ -36,6 +36,16 @@
     <string name="meshup_name_error_invalid_chars">Name contains invalid characters</string>
     <string name="meshup_profile_fingerprint">Your fingerprint</string>
     <string name="meshup_profile_fingerprint_hint">Compare this with a friend in person to verify it is really you.</string>
+    <string name="meshup_identity_banner_unreadable">Your identity could not be loaded, so MeshUp created a new one. People you verified before will see a new fingerprint — verify them again in person.</string>
+    <string name="meshup_identity_banner_not_persisted">Your identity could not be saved. It works for now, but MeshUp may create a new one next time you open the app, and people you verified will need to verify you again in person.</string>
+    <string name="meshup_identity_banner_backup_kept">A copy of the old data was kept on this device.</string>
+    <string name="meshup_identity_banner_got_it">Got it</string>
+    <string name="meshup_identity_reset_button">Reset identity…</string>
+    <string name="meshup_identity_reset_title">Reset identity?</string>
+    <string name="meshup_identity_reset_body">This erases your identity, your messages and your contacts from this device. People you verified before will have to verify you again in person. This cannot be undone.</string>
+    <string name="meshup_identity_reset_type_hint">Type reset to confirm</string>
+    <string name="meshup_identity_reset_confirm">Reset</string>
+    <string name="meshup_identity_reset_cancel">Cancel</string>
     <string name="meshup_settings_title">Settings</string>
     <string name="meshup_settings_internet_title">Internet features</string>
     <string name="meshup_settings_internet_off">Off: MeshUp works only with nearby devices over Bluetooth. Nothing is sent over the Internet.</string>
