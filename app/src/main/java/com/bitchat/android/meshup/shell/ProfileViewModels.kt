@@ -55,7 +55,11 @@ class NameEditViewModel(
 /** Internet master switch (Decision 013). Defaults bind to the process-wide [InternetGate]. */
 class SettingsViewModel(
     val internetEnabled: StateFlow<Boolean> = InternetGate.enabled,
-    private val setEnabled: (Boolean) -> Unit = InternetGate::setEnabled
+    private val setEnabled: (Boolean) -> Unit = InternetGate::setEnabled,
+    private val usedThisProcess: () -> Boolean = { InternetGate.usedThisProcess }
 ) : ViewModel() {
     fun setInternetEnabled(enabled: Boolean) = setEnabled(enabled)
+
+    /** Internet is OFF but was ON earlier in this process: a restart fully closes Tor's connections. */
+    fun restartRecommended(internetOn: Boolean): Boolean = !internetOn && usedThisProcess()
 }

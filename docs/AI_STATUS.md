@@ -1,7 +1,7 @@
 # AI Status
 
 ## Current Phase
-Phase 0.5 — Baseline: **COMPLETE**, TD-29 confirmed Windows-only via CI. Phase 1 plan **APPROVED** (`docs/IMPLEMENTATION_PLAN.md`). PR-1 Foundations committed (`e5b7ff9`, branch `phase1/pr1-foundations`). PR-2 Internet opt-in gate committed on stacked branch `phase1/pr2-internet-gate` after security review + fixes. PR-1/PR-2 pushed as GitHub PRs #1/#2. PR-3 pushed as #3. PR-4 (name step, Profile, Settings/Internet switch) committed locally on `phase1/pr4-profile-settings`. Next: owner decision on Tor-OFF residual (below), then PR-5 (Rooms tab).
+Phase 0.5 — Baseline: **COMPLETE**, TD-29 confirmed Windows-only via CI. Phase 1 plan **APPROVED** (`docs/IMPLEMENTATION_PLAN.md`). PR-1 Foundations committed (`e5b7ff9`, branch `phase1/pr1-foundations`). PR-2 Internet opt-in gate committed on stacked branch `phase1/pr2-internet-gate` after security review + fixes. PR-1/PR-2 pushed as GitHub PRs #1/#2. PR-3 pushed as #3. PR-4 (name step, Profile, Settings/Internet switch) committed locally on `phase1/pr4-profile-settings`. Next: PR-5 (Rooms tab).
 
 ## Completed
 - Phase 0 analysis docs (PROJECT_ANALYSIS, MESH_ARCHITECTURE, SECURITY_REVIEW, TECHNICAL_DEBT, TARGET_ARCHITECTURE rev 2)
@@ -15,7 +15,7 @@ Phase 0.5 — Baseline: **COMPLETE**, TD-29 confirmed Windows-only via CI. Phase
 
 ## In Progress
 - None. Open items carried forward:
-  - **Tor OFF residual (found 2026-10-07, emulator runtime toggle):** after switching Internet OFF, Arti reports stopped but 3 TCP connections to Tor nodes (ports 9001/443) stay ESTABLISHED (>75 s), plus one stale loopback SOCKS socket. Cause CONFIRMED: native `ArtiNative.stop()` (`tools/arti-build/src/lib.rs:434`) only aborts the SOCKS task and intentionally keeps `ARTI_CLIENT` (and its guard channels) alive. New traffic is blocked (gate + no SOCKS listener); no app data flows. Pre-existing upstream behaviour for the legacy Tor toggle. Fix options: process restart on OFF, or native change to drop the TorClient (rebuild libarti_android.so). Owner decision pending.
+  - **Tor OFF residual (found 2026-10-07, emulator runtime toggle):** after switching Internet OFF, Arti reports stopped but 3 TCP connections to Tor nodes (ports 9001/443) stay ESTABLISHED (>75 s), plus one stale loopback SOCKS socket. Cause CONFIRMED: native `ArtiNative.stop()` (`tools/arti-build/src/lib.rs:434`) only aborts the SOCKS task and intentionally keeps `ARTI_CLIENT` (and its guard channels) alive. New traffic is blocked (gate + no SOCKS listener); no app data flows. Pre-existing upstream behaviour for the legacy Tor toggle. Fix options: process restart on OFF, or native change to drop the TorClient (rebuild libarti_android.so). Owner decision (2026-10-07): **restart prompt now** — Settings shows a restart hint + button when Internet is OFF but was ON earlier in the process (emulator-verified: after restart, zero app sockets). Native fix (drop TorClient in `ArtiNative.stop`) is a follow-up PR with security review.
   - Legacy chat-header nickname edit bypasses `DisplayNameValidator` (follow-up).
   - PR-3 follow-ups: new `meshup_*` strings untranslated (lint MissingTranslation, non-blocking); IME-open layout on Chats not verified (emulator has a hardware keyboard); leaving the Chats tab disposes the legacy ChatScreen composition (state lives in ChatViewModel; input draft/scroll may reset).
   - PR-4: Settings switch must toggle via `InternetGate.setEnabled(...)` (single process-wide `NetworkSettings`); hide About-sheet update/Tor controls while OFF (review L3).

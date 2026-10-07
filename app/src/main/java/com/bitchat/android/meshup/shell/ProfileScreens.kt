@@ -176,6 +176,18 @@ fun ProfileScreen(profile: ProfileManager) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (settingsVm.restartRecommended(internet)) {
+            Text(
+                stringResource(R.string.meshup_settings_restart_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            TextButton(
+                onClick = { restartApp(context) },
+                modifier = Modifier.testTag("button_restart")
+            ) { Text(stringResource(R.string.meshup_settings_restart_button)) }
+        }
 
         Text(
             stringResource(R.string.meshup_settings_battery_title),

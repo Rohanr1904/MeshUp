@@ -112,7 +112,7 @@ class ProfileViewModelsTest {
         val flow = MutableStateFlow(false)
         InternetGate.initialize(flow)
         val calls = mutableListOf<Boolean>()
-        val vm = SettingsViewModel(InternetGate.enabled) { calls += it; flow.value = it }
+        val vm = SettingsViewModel(InternetGate.enabled, { calls += it; flow.value = it })
         assertFalse(vm.internetEnabled.value)
         vm.setInternetEnabled(true)
         assertEquals(listOf(true), calls)
@@ -121,5 +121,14 @@ class ProfileViewModelsTest {
         vm.setInternetEnabled(false)
         assertEquals(listOf(true, false), calls)
         assertFalse(vm.internetEnabled.value)
+    }
+
+    @Test fun restartRecommendedOnlyAfterInternetWasUsedAndIsOff() {
+        var used = false
+        val vm = SettingsViewModel(MutableStateFlow(false), {}, { used })
+        assertFalse(vm.restartRecommended(internetOn = false))
+        used = true
+        assertTrue(vm.restartRecommended(internetOn = false))
+        assertFalse(vm.restartRecommended(internetOn = true))
     }
 }

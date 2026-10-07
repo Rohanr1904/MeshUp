@@ -34,6 +34,8 @@
     <string name="meshup_settings_title">Settings</string>
     <string name="meshup_settings_internet_title">Internet features</string>
     <string name="meshup_settings_internet_off">Off: MeshUp works only with nearby devices over Bluetooth. Nothing is sent over the Internet.</string>
+    <string name="meshup_settings_restart_hint">Internet features are off and no new connections are made. Restart MeshUp to fully close the connections that were already open.</string>
+    <string name="meshup_settings_restart_button">Restart MeshUp</string>
     <string name="meshup_settings_internet_on">On: enables Tor, Nostr relays, location channels and delivery to favourites who are far away. Your device connects to Internet servers.</string>
     <string name="meshup_settings_battery_title">Battery</string>
     <string name="meshup_settings_battery_optimization">Battery optimization settings</string>

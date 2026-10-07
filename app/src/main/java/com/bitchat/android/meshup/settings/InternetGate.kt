@@ -30,8 +30,20 @@ object InternetGate {
 
     fun isEnabled(): Boolean = source.value
 
+    /**
+     * True once Internet features have been ON at any point in this process. Turning them OFF stops
+     * new traffic, but the Tor library keeps its client (and connections to Tor nodes) alive until the
+     * process ends, so the UI recommends a restart in that case.
+     */
+    @Volatile
+    var usedThisProcess: Boolean = false
+        private set
+
     /** Public toggle API. Flips the gate synchronously and notifies [InternetController]. */
-    fun setEnabled(enabled: Boolean) = settings.setInternetEnabled(enabled)
+    fun setEnabled(enabled: Boolean) {
+        if (enabled) usedThisProcess = true
+        settings.setInternetEnabled(enabled)
+    }
 
     /** Idempotent: later calls return the same settings and keep the same flow. */
     fun initialize(context: Context): NetworkSettings {
@@ -40,6 +52,7 @@ object InternetGate {
             settingsRef ?: NetworkSettings.create(context).also {
                 settingsRef = it
                 source = it.internetEnabled
+                if (it.internetEnabled.value) usedThisProcess = true
             }
         }
     }
@@ -53,5 +66,6 @@ object InternetGate {
     internal fun resetForTesting() {
         settingsRef = null
         source = closed
+        usedThisProcess = false
     }
 }
