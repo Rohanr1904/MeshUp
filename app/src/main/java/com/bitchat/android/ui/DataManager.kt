@@ -1,5 +1,6 @@
 package com.bitchat.android.ui
 
+import com.bitchat.android.util.Redact
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -159,7 +160,7 @@ class DataManager(private val context: Context) {
     fun loadFavorites() {
         val savedFavorites = prefs.getStringSet("favorites", emptySet()) ?: emptySet()
         _favoritePeers.addAll(savedFavorites)
-        Log.d(TAG, "Loaded ${savedFavorites.size} favorite users from storage: $savedFavorites")
+        Log.d(TAG, "Loaded ${savedFavorites.size} favorite users from storage: ${com.bitchat.android.util.Redact.ids(savedFavorites)}")
     }
     
     fun saveFavorites() {
@@ -169,21 +170,21 @@ class DataManager(private val context: Context) {
     
     fun addFavorite(fingerprint: String) {
         val wasAdded = _favoritePeers.add(fingerprint)
-        Log.d(TAG, "addFavorite: fingerprint=$fingerprint, wasAdded=$wasAdded")
+        Log.d(TAG, "addFavorite: fingerprint=${Redact.id(fingerprint)}, wasAdded=$wasAdded")
         saveFavorites()
         logAllFavorites()
     }
     
     fun removeFavorite(fingerprint: String) {
         val wasRemoved = _favoritePeers.remove(fingerprint)
-        Log.d(TAG, "removeFavorite: fingerprint=$fingerprint, wasRemoved=$wasRemoved")
+        Log.d(TAG, "removeFavorite: fingerprint=${Redact.id(fingerprint)}, wasRemoved=$wasRemoved")
         saveFavorites()
         logAllFavorites()
     }
     
     fun isFavorite(fingerprint: String): Boolean {
         val result = _favoritePeers.contains(fingerprint)
-        Log.d(TAG, "isFavorite check: fingerprint=$fingerprint, result=$result")
+        Log.d(TAG, "isFavorite check: fingerprint=${Redact.id(fingerprint)}, result=$result")
         return result
     }
     
@@ -191,7 +192,7 @@ class DataManager(private val context: Context) {
         Log.i(TAG, "=== ALL FAVORITE USERS ===")
         Log.i(TAG, "Total favorites: ${_favoritePeers.size}")
         _favoritePeers.forEach { fingerprint ->
-            Log.i(TAG, "Favorite fingerprint: $fingerprint")
+            Log.i(TAG, "Favorite fingerprint: ${Redact.id(fingerprint)}")
         }
         Log.i(TAG, "========================")
     }
