@@ -69,9 +69,10 @@ class AdaptersTest {
         assertEquals(listOf("#a", "#b"), rooms.map { it.name })
         assertEquals(3, rooms[0].unreadCount)
         assertTrue(rooms[1].isPasswordProtected)
-        assertTrue(svc.joinRoom("x"))
+        assertEquals(JoinResult.JOINED, svc.joinRoom("x"))
         src.joinResult = false
-        assertFalse(svc.joinRoom("y"))
+        assertEquals(JoinResult.REJECTED, svc.joinRoom("y"))
+        assertEquals(JoinResult.PASSWORD_PROTECTED, svc.joinRoom("#b"))
         svc.leaveRoom("x")
         assertEquals(listOf("x", "y"), src.joined)
         assertEquals(listOf("x"), src.left)

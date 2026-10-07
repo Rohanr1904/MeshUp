@@ -1,5 +1,6 @@
 package com.bitchat.android.meshup.shell
 
+import com.bitchat.android.meshup.service.JoinResult
 import com.bitchat.android.meshup.service.ChannelRoomService
 import com.bitchat.android.meshup.service.ChatViewModelMessagingService
 import com.bitchat.android.meshup.service.ChatViewModelPeopleService
@@ -53,11 +54,20 @@ class ScreenViewModelsTest {
 
     @Test fun roomsJoinNormalizesAndRejectsInvalid() {
         val vm = RoomsViewModel(ChannelRoomService(src, scope.backgroundScope))
-        assertFalse(vm.join("  "))
-        assertFalse(vm.join("#"))
-        assertFalse(vm.join("two words"))
-        assertTrue(vm.join(" #general "))
+        assertEquals(JoinResult.INVALID_NAME, vm.join("  "))
+        assertEquals(JoinResult.INVALID_NAME, vm.join("#"))
+        assertEquals(JoinResult.INVALID_NAME, vm.join("two words"))
+        assertEquals(JoinResult.INVALID_NAME, vm.join("a#b"))
+        assertEquals(JoinResult.JOINED, vm.join(" #general "))
         assertEquals(listOf("general"), src.joined)
+    }
+
+    @Test fun roomsPasswordRoomIsRefusedBeforeLegacyJoin() {
+        val vm = RoomsViewModel(ChannelRoomService(src, scope.backgroundScope))
+        src.passwordProtectedChannels.value = setOf("#secret")
+        assertEquals(JoinResult.PASSWORD_PROTECTED, vm.join("secret"))
+        assertEquals(JoinResult.PASSWORD_PROTECTED, vm.join("#secret"))
+        assertTrue(src.joined.isEmpty())
     }
 
     @Test fun roomsStateAndLeave() {
