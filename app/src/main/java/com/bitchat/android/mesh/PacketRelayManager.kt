@@ -4,6 +4,7 @@ import com.bitchat.android.protocol.MessageType
 import android.util.Log
 import com.bitchat.android.model.RoutedPacket
 import com.bitchat.android.protocol.BitchatPacket
+import com.bitchat.android.util.AppConstants
 import com.bitchat.android.util.toHexString
 import kotlinx.coroutines.*
 import kotlin.random.Random
@@ -61,9 +62,14 @@ class PacketRelayManager(private val myPeerID: String) {
             return
         }
         
+        // Clamp oversized TTLs to the protocol maximum before relaying (R-5.3): a forged TTL (e.g. 255)
+        // would otherwise flood the whole mesh. Clamp here, not at ingress: SecurityManager treats
+        // ttl == MESSAGE_TTL_HOPS as direct ingress. Signatures exclude TTL, so this cannot break them.
+        val ingressTtl = minOf(packet.ttl, AppConstants.MESSAGE_TTL_HOPS)
+
         // Decrement TTL by 1
         val networkSize = delegate?.getNetworkSize() ?: 1
-        val decrementedTtl = (packet.ttl - 1u).toUByte()
+        val decrementedTtl = (ingressTtl - 1u).toUByte()
         val voiceTtl = if (
             MessageType.fromValue(packet.type) == MessageType.VOICE_FRAME && networkSize > 6
         ) minOf(decrementedTtl, 5u.toUByte()) else decrementedTtl
