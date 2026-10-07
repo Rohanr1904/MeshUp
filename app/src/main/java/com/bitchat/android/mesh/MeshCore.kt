@@ -181,7 +181,7 @@ class MeshCore(
         packet: BitchatPacket,
         peerID: String?,
         relayAddress: String?,
-        ingressLinkID: String? = null
+        ingressLinkID: String
     ) {
         packetProcessor.processPacket(
             RoutedPacket(
