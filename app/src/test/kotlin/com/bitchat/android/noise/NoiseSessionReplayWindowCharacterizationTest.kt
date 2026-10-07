@@ -12,13 +12,10 @@ import org.junit.Test
 /**
  * Characterization tests for the transport-message replay window in [NoiseSession].
  *
- * KNOWN DEFECT R1 (docs/SECURITY_REVIEW.md, upstream H1): `markNonceAsSeen` shifts the
- * bitmap in the wrong direction when a newer nonce arrives. After advancing by one, the
- * bit of the previous nonce lands at offset 15 instead of offset 1, so a captured
- * ciphertext of the previous message is decrypted again.
- *
- * Tests named `knownDefect_*` pin the CURRENT (insecure) behaviour so the suite stays
- * green. The fix (TARGET_ARCHITECTURE R-5.1) must invert them: every replay must throw.
+ * Defect R1 (docs/SECURITY_REVIEW.md, upstream H1) was that `markNonceAsSeen` shifted the
+ * bitmap in the wrong direction when a newer nonce arrived, so a captured ciphertext of the
+ * previous message was decrypted again. Fixed by P2-PR1 (TARGET_ARCHITECTURE R-5.1); the
+ * `R1_*` tests assert that every replay is rejected.
  */
 class NoiseSessionReplayWindowCharacterizationTest {
     private data class TestIdentity(
@@ -82,28 +79,18 @@ class NoiseSessionReplayWindowCharacterizationTest {
         assertReplayRejected(ct0)
     }
 
-    /**
-     * KNOWN DEFECT R1. Correct expectation: replaying message 0 after message 1 throws.
-     * Current behaviour: it decrypts a second time.
-     */
     @Test
-    fun knownDefect_R1_replayOfPreviousMessageIsAcceptedAfterWindowAdvances() {
+    fun R1_replayOfPreviousNonceAfterAdvanceIsRejected() {
         val ct0 = sender.encrypt(payload(0))
         val ct1 = sender.encrypt(payload(1))
         receiver.decrypt(ct0)
         receiver.decrypt(ct1)
 
-        val replayed = receiver.decrypt(ct0)
-
-        assertArrayEquals("KNOWN DEFECT R1: replay accepted; the fix must make this throw", payload(0), replayed)
+        assertReplayRejected(ct0)
     }
 
-    /**
-     * KNOWN DEFECT R1. Correct expectation: a message accepted out of order is never
-     * accepted again. Current behaviour: once the window advances, its bit is lost.
-     */
     @Test
-    fun knownDefect_R1_outOfOrderMessageCanBeReplayedAfterNextAdvance() {
+    fun R1_outOfOrderNonceCannotBeReplayedAfterNextAdvance() {
         val ct0 = sender.encrypt(payload(0))
         val ct1 = sender.encrypt(payload(1))
         val ct2 = sender.encrypt(payload(2))
@@ -111,9 +98,7 @@ class NoiseSessionReplayWindowCharacterizationTest {
         receiver.decrypt(ct0)
         receiver.decrypt(ct2)
 
-        val replayed = receiver.decrypt(ct0)
-
-        assertArrayEquals("KNOWN DEFECT R1: replay accepted; the fix must make this throw", payload(0), replayed)
+        assertReplayRejected(ct0)
     }
 
     private fun assertReplayRejected(ciphertext: ByteArray) {

@@ -19,12 +19,10 @@ import org.mockito.kotlin.whenever
 /**
  * Characterization tests for TTL handling on relay in [PacketRelayManager].
  *
- * KNOWN DEFECT (docs/SECURITY_REVIEW.md R3, TARGET_ARCHITECTURE R-5.3): ingress TTL is not
- * clamped to [AppConstants.MESSAGE_TTL_HOPS]. A packet arriving with TTL 255 is relayed with
- * TTL 254, and `ttl >= 4` always relays, so one forged packet can travel ~255 hops.
- *
- * Tests named `knownDefect_*` pin the CURRENT behaviour. The fix must invert them: the
- * relayed TTL must never exceed MESSAGE_TTL_HOPS - 1.
+ * R-5.3 (docs/SECURITY_REVIEW.md R3, TARGET_ARCHITECTURE R-5.3) is FIXED: an oversized TTL is
+ * clamped to [AppConstants.MESSAGE_TTL_HOPS] before the decrement, so the relayed TTL never
+ * exceeds MESSAGE_TTL_HOPS - 1 (previously TTL 255 was relayed as 254). The `ttl >= 4`
+ * always-relay policy is unchanged (TD-06).
  */
 @ExperimentalCoroutinesApi
 class PacketRelayTtlCharacterizationTest {
@@ -59,27 +57,20 @@ class PacketRelayTtlCharacterizationTest {
         assertEquals((AppConstants.MESSAGE_TTL_HOPS - 1u).toUByte(), relayedTtl())
     }
 
-    /**
-     * KNOWN DEFECT R-5.3. Correct expectation: relayed TTL <= MESSAGE_TTL_HOPS - 1 (6).
-     * Current behaviour: TTL 255 is relayed as 254.
-     */
+    /** R-5.3 (fixed): an oversized TTL is clamped to MESSAGE_TTL_HOPS before the decrement. */
     @Test
-    fun knownDefect_R5_3_oversizedIngressTtlIsRelayedUnclamped() = runTest {
+    fun R5_3_oversizedIngressTtlIsClampedBeforeRelay() = runTest {
         packetRelayManager.handlePacketRelay(RoutedPacket(broadcastPacket(ttl = 255u), otherPeerID))
 
-        assertEquals(
-            "KNOWN DEFECT R-5.3: TTL not clamped; the fix must cap it at MESSAGE_TTL_HOPS - 1",
-            254u.toUByte(),
-            relayedTtl()
-        )
+        assertEquals((AppConstants.MESSAGE_TTL_HOPS - 1u).toUByte(), relayedTtl())
     }
 
     /**
-     * KNOWN DEFECT R-5.3. A TTL above the protocol default always takes the `ttl >= 4`
-     * branch, so it is relayed regardless of network size (no probabilistic damping).
+     * R-5.3 (fixed) clamps the TTL, but a clamped TTL of 6 still takes the `ttl >= 4` branch, so it
+     * is relayed regardless of network size. That is the existing relay policy (TD-06), not R-5.3.
      */
     @Test
-    fun knownDefect_R5_3_oversizedTtlBypassesProbabilisticRelayInLargeNetworks() = runTest {
+    fun R5_3_oversizedTtlIsClampedButHighTtlStillAlwaysRelays_TD06() = runTest {
         whenever(delegate.getNetworkSize()).thenReturn(500)
 
         repeat(20) {
@@ -88,9 +79,54 @@ class PacketRelayTtlCharacterizationTest {
 
         argumentCaptor<RoutedPacket> {
             verify(delegate, org.mockito.kotlin.times(20)).broadcastPacket(capture())
-            allValues.forEach { assertEquals(199u.toUByte(), it.packet.ttl) }
+            allValues.forEach { assertEquals((AppConstants.MESSAGE_TTL_HOPS - 1u).toUByte(), it.packet.ttl) }
         }
     }
+
+    @Test
+    fun `TTL just above the maximum is clamped`() = runTest {
+        packetRelayManager.handlePacketRelay(
+            RoutedPacket(broadcastPacket(ttl = (AppConstants.MESSAGE_TTL_HOPS + 1u).toUByte()), otherPeerID)
+        )
+
+        assertEquals((AppConstants.MESSAGE_TTL_HOPS - 1u).toUByte(), relayedTtl())
+    }
+
+    @Test
+    fun `oversized voice frame in a small network is clamped`() = runTest {
+        // networkSize <= 6 skips the voice cap, so only the R-5.3 clamp limits the TTL.
+        whenever(delegate.getNetworkSize()).thenReturn(5)
+        val voice = broadcastPacket(ttl = 255u).copy(type = MessageType.VOICE_FRAME.value)
+        packetRelayManager.handlePacketRelay(RoutedPacket(voice, otherPeerID))
+
+        assertEquals((AppConstants.MESSAGE_TTL_HOPS - 1u).toUByte(), relayedTtl())
+    }
+
+    @Test
+    fun `oversized voice frame is clamped then voice-capped in larger networks`() = runTest {
+        // networkSize is 10 (> 6), so the existing voice cap of 5 applies after the clamp.
+        val voice = broadcastPacket(ttl = 255u).copy(type = MessageType.VOICE_FRAME.value)
+        packetRelayManager.handlePacketRelay(RoutedPacket(voice, otherPeerID))
+
+        assertEquals(5u.toUByte(), relayedTtl())
+    }
+
+    @Test
+    fun `oversized source-routed packet is clamped on the targeted next hop`() = runTest {
+        val nextHop = "3333333333333333"
+        whenever(delegate.sendToPeer(any(), any())).thenReturn(true)
+        val routed = broadcastPacket(ttl = 255u).copy(route = listOf(peerBytes(myPeerID), peerBytes(nextHop)))
+
+        packetRelayManager.handlePacketRelay(RoutedPacket(routed, otherPeerID))
+
+        val sent = argumentCaptor<RoutedPacket> {
+            verify(delegate).sendToPeer(org.mockito.kotlin.eq(nextHop), capture())
+        }.firstValue
+        assertEquals((AppConstants.MESSAGE_TTL_HOPS - 1u).toUByte(), sent.packet.ttl)
+        verify(delegate, never()).broadcastPacket(any())
+    }
+
+    private fun peerBytes(hex: String) = ByteArray(8) { i -> hex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
 
     private fun relayedTtl(): UByte = argumentCaptor<RoutedPacket> {
         verify(delegate).broadcastPacket(capture())
