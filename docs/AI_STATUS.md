@@ -39,7 +39,7 @@ Phase 0.5 — Baseline: **COMPLETE**, TD-29 confirmed Windows-only via CI. Phase
 - Physical devices: NOT run
 
 ## Next Action
-1. Product owner: approve `docs/IMPLEMENTATION_PLAN_PHASE2.md` and answer decisions D1-D11 (section 6).
+1. Phase 2 decisions recorded (Decision 015: D1 1 h, D2 200, D3 30s/1m/2m/2m, D7 type-"reset" confirm; others default).
 2. Merge PR #5 (Rooms tab) once CI is green.
 3. Then Phase 2 Track A (P2-PR1 replay fix, P2-PR2 TTL clamp, P2-PR3 release log stripping).
 

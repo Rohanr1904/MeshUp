@@ -1,6 +1,6 @@
 # MeshUp — Implementation Plan: Phase 2 (Reliability + engine hardening)
 
-> Status: **DRAFT, awaiting product-owner approval** (2026-10-07) · Baseline: `main` @ `2c85883` (Phase 1 PR-1..4 merged; PR-5 open)
+> Status: **Decisions recorded 2026-10-07** (D1, D2, D3, D7 set by the product owner; the rest use the proposed defaults; see Decision 015) · Baseline: `main` @ `2c85883` (Phase 1 PR-1..4 merged; PR-5 open)
 > Implements: TARGET_ARCHITECTURE R-1 (durable outbox + delivery states), R-5.1/5.2/5.3/5.4/5.5, R-9, plus the Phase 1 Tor-stop follow-up.
 > Out of scope: new direct-chat screen and messaging redesign (Phase 2b, after R-1 lands), password rooms (Phase 3 / R-4), store-and-forward (R-7, design only later), R-5.6 media encryption and R-5.7 advertised ID (later), ML Kit replacement (Phase 6).
 > Evidence: two read-only inspections on 2026-10-07 (mesh-architect, security-engineer; Opus); key claims re-checked by the chief engineer (marked ✔).
@@ -148,20 +148,22 @@ Each PR goes through the chief engineer's review. **Sec** = security-engineer (O
 6. The manifest is free of unused permissions and FGS types. BLE discovery still works on physical devices after `neverForLocation`.
 7. `:app:assembleDebug`, `:wear:assembleDebug` and `lintDebug` pass.
 
-## 6. Product-owner decisions needed (proposed defaults in bold)
-| # | Question | Proposed default |
+## 6. Product-owner decisions (recorded 2026-10-07; Decision 015)
+| # | Question | Decision |
 |---|---|---|
-| D1 | How long a queued message waits before it becomes `Failed` | **24 h** (current) |
-| D2 | Per-peer queue limit | **100**; overflow becomes `Failed("queue full")` |
-| D3 | ACK-timeout resend schedule and max attempts | **30 s, 1 m, 2 m, 5 m, 10 m, then Failed** (5 attempts) |
+| D1 | How long a queued message waits before it becomes `Failed` | **1 h** (owner; was 24 h) |
+| D2 | Per-peer queue limit | **200** (owner); overflow becomes `Failed("queue full")` |
+| D3 | ACK-timeout resend schedule and max attempts | **30 s, 1 m, 2 m, 2 m, then Failed** (owner; 4 resends) |
 | D4 | Do Nostr-routed messages get ACK resends? | **No** in Phase 2 (mesh only); revisit with R-7 |
 | D5 | Show `Failed` with a Retry action? | **Yes** |
 | D6 | Signing failure surfaces as "send failed"? | **Yes** |
-| D7 | Identity reset UX | **Warn with a banner plus re-verify guidance; don't block** |
+| D7 | Identity reset UX | **Warn with a banner plus re-verify guidance; don't block. Any deliberate identity reset requires the user to type `reset` to confirm** (owner) |
 | D8 | Drop background location on API 31+ (relying on `neverForLocation`), accepting reduced background discovery until verified on devices? | **Yes, behind a device test**; keep it for API 26–30 |
 | D9 | Keep in-app APK update/download and hotspot sharing in a future Play build? | **Decide before Phase 9**; no change in Phase 2 |
 | D10 | Tor native fix in Phase 2 (needs a Linux host or a CI rebuild job)? | **Yes, if a CI rebuild job is acceptable**; otherwise defer and keep the restart prompt |
 | D11 | Release logging level | **Only w/e, redacted**; no diagnostics export in Phase 2 |
+
+D4–D6 and D8–D11 use the proposed defaults. Consequence of D1 + D3: a message for an absent peer waits up to 1 h; once handed to the mesh, it is resent at +30 s, +1 m, +2 m and +2 m (about 5.5 min in total) before it becomes `Failed`, which the user can Retry (D5).
 
 ## 7. Risks
 | Risk | Mitigation |
