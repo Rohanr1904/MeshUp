@@ -109,3 +109,20 @@ Decision:
 - D4–D6, D8–D11: the proposed defaults in `docs/IMPLEMENTATION_PLAN_PHASE2.md` §6.
 Consequences:
 Short expiry favours honest "Failed" states over long background waits; users retry manually (D5). Values live in `AppConstants` so they can be tuned after physical-device testing (Decision 009).
+
+## Decision 016 — Launch scope: defer non-blocking hardening, gate launch on devices, identity and licence
+Date: 2026-10-08 · Decided by: product owner
+Decision:
+- Finish Phase 2 core before launch: P2-PR8 (durable router), P2-PR9 (ACK-timeout resend, Failed + Retry), P2-PR10 (manifest/permission compliance).
+- **Deferred until after launch:** P2-PR11 (Arti native stop fix; the Settings restart prompt remains the mitigation, so D10 is deferred), the review follow-ups (voice relay delay and private-file save off the stripe consumers, type-specific caps for handshakes/announces, H12 announce dedup bypass, remaining full peer IDs in w/e logs, NoiseSession lock split / receive-side rekey count), and the ML Kit replacement (Decision 013 addendum).
+- **Launch gates (must be done before public release):**
+  1. Physical-device verification on 2–3 Android phones: exactly-once delivery after process kill, multi-hop relay, BLE discovery after the permission change (Decision 009).
+  2. Own app identity: name, applicationId (replacing `com.bitchat.droid`), signing key under the owner's control (Play App Signing recommended), icon, privacy-policy URL; upstream identifiers removed (R-10).
+  3. Licence: distribute under GPLv3 with source available and upstream attribution; README/PRIVACY_POLICY "public domain" statements corrected (Decision 010/011); owner confirms GPLv3 fits the business model, with legal advice if unsure.
+  4. Release pipeline signed with the owner's key via repository secrets; Play forms (data safety, permission declarations) answered from the code.
+- Phase 3 password rooms go before launch only if password rooms are wanted in v1 (the legacy password check is a stub).
+- **Distribution (2026-10-08):** GitHub Releases plus a website download; **no Play Store**. Consequences: the owner holds the release signing key directly (no Play App Signing, so the key must be backed up securely; losing it prevents updates); the in-app update check and hotspot APK sharing stay (resolves D9); Play-specific forms and policies do not apply, but the privacy policy is still published on the website.
+- **Application ID:** `io.github.rohanr1904.<name>`, final segment to match the chosen app name (pending).
+Consequences:
+Deferred items stay tracked in `docs/AI_STATUS.md`. The app ID and name are permanent once published, so they need explicit owner answers before the change is made.
+
