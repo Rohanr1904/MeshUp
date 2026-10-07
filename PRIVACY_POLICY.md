@@ -1,156 +1,94 @@
-# bitchat Privacy Policy
+# NearBird Privacy Policy
 
-*Last updated: January 2025*
+> **DRAFT — not yet published.** Placeholders in `[brackets]` must be filled in, and the text should be reviewed (ideally by a lawyer) before release. It describes the app's behaviour as of `main` on 2026-10-08.
 
-## Our Commitment
+*Last updated: [publication date]*
 
-bitchat is designed with privacy as its foundation. We believe private communication is a fundamental human right. This policy explains how bitchat protects your privacy.
+NearBird is an offline-first messenger. It lets phones near each other exchange messages over Bluetooth without accounts, phone numbers or servers. This policy explains what the app stores, what it shares, and with whom.
 
 ## Summary
 
-**WE DO NOT COLLECT ANY INFORMATION.**
+- **No account, no phone number, no email.** You choose a display name; that's it.
+- **We (the developers) receive no data from the app.** There are no NearBird servers, no analytics and no ads.
+- **Offline by default.** Bluetooth mesh messaging works with no Internet connection. **Internet features are off until you turn them on** in Settings.
+- **One known exception:** QR-code scanning uses a Google library (ML Kit) that may send anonymous usage statistics to Google, even with Internet features off. See [Third-party components](#third-party-components).
 
-- **No personal data collection** - We don't collect names, emails, or phone numbers
-- **No location data collection** - Location is accessed only for local processing (BLE/Geohash) and is never collected or sent to us
-- **Hybrid Functionality** - bitchat offers two modes of communication:
-  - **Bluetooth Mesh Chat**: This mode is completely offline, using peer-to-peer Bluetooth connections. It does not use any servers or internet connection.
-  - **Geohash Chat**: This mode uses an internet connection to communicate with others in a specific geographic area. It relies on Nostr relays for message transport.
-- **No tracking** - We have no analytics, telemetry, or user tracking
-- **Open source** - You can verify these claims by reading our code
+## What is stored on your device
 
-## What Information bitchat Stores
+Everything below stays on your phone. Nothing is uploaded to us.
 
-### On Your Device Only
+| Data | Purpose | Protection |
+|---|---|---|
+| Identity keys (Noise and signing keys) | Prove your identity to people you talk to; encrypt private messages | Stored in Android encrypted storage, backed by the Android Keystore. Excluded from cloud backup and device-to-device transfer. |
+| Display name | Shown to people nearby | Stored locally |
+| Private message history | Show your conversations | Message content is encrypted at rest (AES-GCM, Android Keystore). Some metadata — such as timestamps, conversation identifiers and delivery status — is stored unencrypted on the device. |
+| Unsent private messages | Deliver a message when the other person comes back in range | Encrypted like message history; kept for at most 1 hour, then marked as failed |
+| Favourites and joined rooms | Recognise people you've marked as favourites; remember your rooms | Stored locally |
+| Settings | Your preferences (for example, whether Internet features are on) | Stored locally |
+| Diagnostic logs | Help diagnose problems on your own device | Release builds keep only warnings and errors, with identifiers replaced by short tags. Logs stay on the device and are not sent to us. |
 
-1. **Identity Key** 
-   - A cryptographic key generated on first launch
-   - Stored locally in your device's secure storage
-   - Allows you to maintain "favorite" relationships across app restarts
-   - Never leaves your device
+Public mesh messages and room messages are kept in memory only and are gone when the app closes.
 
-2. **Nickname**
-   - The display name you choose (or auto-generated)
-   - Stored only on your device
-   - Shared with peers you communicate with
+## What people nearby can see
 
-3. **Message History** (if enabled)
-   - When room owners enable retention, messages are saved locally
-   - Stored encrypted on your device
-   - You can delete this at any time
+When NearBird is running, other NearBird and bitchat users within Bluetooth range (and, through relaying, a few hops further) can see:
 
-4. **Favorite Peers**
-   - Public keys of peers you mark as favorites
-   - Stored only on your device
-   - Allows you to recognize these peers in future sessions
+- Your **display name**.
+- Your **public keys** and a device identifier used by the mesh protocol. These let others recognise your device while you are nearby.
+- **Messages you send** to public chat or rooms.
+- **Private messages** you send them. Private messages are end-to-end encrypted (Noise protocol); phones that relay them cannot read them.
 
-### Temporary Session Data
+Your phone also relays other people's messages to help the mesh work. Relayed private messages are encrypted and cannot be read by your phone.
 
-During each session, bitchat temporarily maintains:
-- Active peer connections (forgotten when app closes)
-- Routing information for message delivery
-- Cached messages for offline peers (12 hours max)
+## Internet features (off by default)
 
-## What Information is Shared
+If you turn on **Internet features** in Settings, NearBird also uses the Internet:
 
-### With Other bitchat Users
+| Feature | What is sent, and to whom |
+|---|---|
+| **Tor** (on by default within Internet features) | Internet traffic is routed through the Tor network to hide your IP address from the services below. |
+| **Nostr relays** | Encrypted private messages to favourites who are not nearby, and messages in location channels, are sent through public Nostr relays run by third parties. |
+| **Location channels** | Your **approximate area** (a "geohash", not your exact coordinates) is shared with Nostr relays and with other people in that channel. |
+| **Place names** | To name a location channel, your coordinates may be sent to your device's built-in geocoder or to OpenStreetMap Nominatim. |
+| **Relay list and update checks** | The app downloads a public list of Nostr relays and checks for app updates (GitHub). |
 
-When you use bitchat, nearby peers can see:
-- Your chosen nickname
-- Your ephemeral public key (changes each session)
-- Messages you send to public rooms or directly to them
-- Your approximate Bluetooth signal strength (for connection quality)
+When you turn Internet features off, the app stops making new Internet connections. A restart fully closes connections that were already open; the app tells you when this is recommended.
 
-### With Room Members
+## Permissions
 
-When you join a password-protected room:
-- Your messages are visible to others with the password
-- Your nickname appears in the member list
-- Room owners can see you've joined
+- **Bluetooth (nearby devices):** to find and talk to nearby NearBird users.
+- **Location:** Android requires location permission for Bluetooth scanning on some versions. NearBird does not record your location for Bluetooth. Location is used for location channels only if you turn on Internet features and use that feature.
+- **Notifications:** to tell you about new messages.
+- **Battery optimisation exemption (optional):** so the mesh keeps working in the background.
 
-## What We DON'T Do
+## Third-party components
 
-bitchat **never**:
-- Collects personal information
-- Collects location history
-- Transmits any data to us (the developers)
-- Stores data on servers
-- Shares data with third parties
-- Uses analytics or telemetry
-- Creates user profiles
-- Requires registration
+- **Google ML Kit (barcode scanning):** used when you scan a QR code to verify a contact. It runs on the device, but it may send anonymous usage statistics to Google. We plan to replace it with a fully offline scanner.
+- **Nostr relays and the Tor network:** used only when Internet features are on, as described above. They are run by third parties with their own policies.
 
-## Encryption
+## Your control
 
-All private messages use end-to-end encryption:
-- **X25519** for key exchange
-- **AES-256-GCM** for message encryption
-- **Ed25519** for digital signatures
-- **Argon2id** for password-protected rooms
+- **Edit your display name** at any time in Profile.
+- **Reset identity:** Profile → *Reset identity…* (type `reset` to confirm). This erases your identity, messages and contacts.
+- **Emergency wipe:** triple-tap the app title to instantly erase all data.
+- **Turn Internet features off** at any time in Settings.
+- **Uninstall:** removes all NearBird data from your device.
 
-## Your Rights
+Because we hold no data about you, there is nothing for us to export or delete on a server.
 
-You have complete control:
-- **Delete Everything**: Triple-tap the logo to instantly wipe all data
-- **Leave Anytime**: Close the app and your presence disappears
-- **No Account**: Nothing to delete from servers because there are none
-- **Portability**: Your data never leaves your device unless you export it
+## Children
 
-## Location Data & Permissions
+NearBird does not collect personal information from anyone, including children. [Set the minimum age for your distribution channel, e.g. 13+.]
 
-To provide the core functionality of bitchat, we access your device's location data. This access is necessary for the following specific purposes:
+## Source code
 
-### 1. Bluetooth Low Energy (BLE) Scanning
-- **Why we need it:** The Android operating system requires Location permission to scan for nearby Bluetooth LE devices (especially on Android 11 and lower). This is a system-level requirement because Bluetooth scans can theoretically be used to derive location.
-- **How we use it:** We use this permission strictly to discover other bitchat peers nearby for the "Bluetooth Mesh Chat" mode.
-- **Privacy protection:** We do not record or store your location during this process. The data is processed instantaneously by the Android system to facilitate the connection.
+NearBird is free software under the GNU General Public License v3.0. You can review the source code that implements everything described here at [repository URL].
 
-### 2. Geohash Chat Functionality
-- **Why we need it:** The "Geohash Chat" mode allows you to communicate with others in your approximate geographic area.
-- **How we use it:** If you enable this mode, we access your location to calculate a "geohash" (a short alphanumeric string representing a geographic region). This geohash is used to find and subscribe to relevant channels on decentralized Nostr relays.
-- **Privacy protection:** 
-  - Your precise GPS coordinates are **never** sent to any server or peer.
-  - Only the coarse geohash (representing an area, not a pinpoint) is shared with the Nostr network.
-  - You can use the "Bluetooth Mesh Chat" mode without this feature if you prefer.
+## Changes
 
-**We do not collect, store, or share your location history.** Location data is processed locally on your device to enable these specific features.
-
-## Children's Privacy
-
-bitchat does not knowingly collect information from children. The app has no age verification because it collects no personal information from anyone.
-
-## Data Retention
-
-- **Messages**: Deleted from memory when app closes (unless room retention is enabled)
-- **Identity Key**: Persists until you delete the app
-- **Favorites**: Persist until you remove them or delete the app
-- **Everything Else**: Exists only during active sessions
-
-## Security Measures
-
-- All communication is encrypted
-- No data transmitted to servers (there are none)
-- Open source code for public audit
-- Regular security updates
-- Cryptographic signatures prevent tampering
-
-## Changes to This Policy
-
-If we update this policy:
-- The "Last updated" date will change
-- The updated policy will be included in the app
-- No retroactive changes can affect data (since we don't collect any)
+If this policy changes, the "Last updated" date will change and the new policy will ship with the app and be published at [policy URL].
 
 ## Contact
 
-bitchat is an open source project. For privacy questions:
-- Review our code: https://github.com/yourusername/bitchat
-- Open an issue on GitHub
-- Join the discussion in public rooms
-
-## Philosophy
-
-Privacy isn't just a feature—it's the entire point. bitchat proves that modern communication doesn't require surrendering your privacy. No accounts, no servers, no surveillance. Just people talking freely.
-
----
-
-*This policy is released into the public domain under The Unlicense, just like bitchat itself.*
+[Developer or organisation name]
+[Contact email]

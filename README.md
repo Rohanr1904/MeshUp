@@ -27,7 +27,11 @@ This is the Android implementation of bitchat, fully protocol-compatible with th
 
 ## License
 
-This project is released into the public domain. See the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](LICENSE.md) file for the full text.
+
+It is based on [bitchat for Android](https://github.com/permissionlesstech/bitchat-android) by permissionlesstech, which is also distributed under GPLv3. Upstream switched from the Unlicense to GPLv3 in February 2026; earlier README and policy statements describing the project as "public domain" no longer apply.
+
+Under GPLv3, anyone who receives the app may obtain, modify and redistribute its corresponding source code under the same licence.
 
 ## Features
 
