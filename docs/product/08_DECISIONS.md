@@ -90,6 +90,9 @@ Decision:
 Tor, Nostr relays, geohash channels and location notes do not start until the user enables "Internet features". The default is OFF for new installs.
 Consequences:
 The startup init in `BitchatApplication` must be gated (TARGET R-6). Favourites-over-Nostr delivery works only after opt-in. The behaviour for existing installs (migration of the current always-on behaviour) needs a decision when R-6 is implemented. Verification: no Internet sockets at cold start with the switch OFF.
+Addendum (2026-10-07, product owner, Phase 1 PR-2):
+- Existing installs: no migration needed; MeshUp ships under a new applicationId (plan P1-7).
+- Known exception (PR-2 review M3): ML Kit barcode-scanning (QR verification in `ui/VerificationSheet.kt`) bundles Google `datatransport` CCT telemetry, which uses its own HTTP stack outside the OkHttp gate and may send usage logs while Internet features are OFF. Not yet confirmed by network capture. Accepted for Phase 1; follow-up: replace ML Kit with an offline QR decoder (dependency change, own PR).
 
 ## Decision 014 — Wear OS out of scope for v1, must keep compiling (A4)
 Date: 2026-10-07 · Decided by: product owner

@@ -247,6 +247,13 @@ class NostrRelayManager private constructor() {
 
     // --- Internal helpers ---
 
+    // MeshUp: Internet opt-in gate (Decision 013) - relay choke point; blocks connect/send while OFF
+    private fun internetBlocked(op: String): Boolean {
+        if (com.bitchat.android.meshup.settings.InternetGate.isEnabled()) return false
+        Log.d(TAG, "Internet features off; blocked $op")
+        return true
+    }
+
     private fun isNetworkActionAllowed(liveLocationToken: Long?): Boolean =
         liveLocationToken == null || LiveLocationPrivacyGate.accepts(liveLocationToken)
 
@@ -392,6 +399,8 @@ class NostrRelayManager private constructor() {
      * Connect to all configured relays
      */
     fun connect() {
+        // MeshUp: Internet opt-in gate (Decision 013)
+        if (internetBlocked("connect")) return
         desiredConnected.set(true)
         Log.i(TAG, "Connecting to ${relaysList.size} Nostr relays")
         scope.launch {
@@ -448,6 +457,8 @@ class NostrRelayManager private constructor() {
         relayUrls: List<String>? = null,
         liveLocationToken: Long? = null
     ) {
+        // MeshUp: Internet opt-in gate (Decision 013)
+        if (internetBlocked("sendEvent")) return
         val targetRelays = (relayUrls ?: relaysList.map { it.url })
             .filter { it.isNotBlank() }
             .distinct()
@@ -600,6 +611,8 @@ class NostrRelayManager private constructor() {
      * Manually retry connection to a specific relay
      */
     fun retryConnection(relayUrl: String) {
+        // MeshUp: Internet opt-in gate (Decision 013)
+        if (internetBlocked("retryConnection")) return
         val relay = relaysList.find { it.url == relayUrl } ?: return
         desiredConnected.set(true)
         val liveToken = liveLocationRelayTokens[relayUrl]
@@ -838,6 +851,8 @@ class NostrRelayManager private constructor() {
         urlString: String,
         liveLocationToken: Long? = null
     ) {
+        // MeshUp: Internet opt-in gate (Decision 013) - lowest point before a WebSocket is opened
+        if (internetBlocked("connectToRelay")) return
         if (!desiredConnected.get()) return
         val connectionToken = liveLocationToken
             ?.takeIf { urlString !in nonLiveRelayUrls }

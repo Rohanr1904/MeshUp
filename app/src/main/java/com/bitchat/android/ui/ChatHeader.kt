@@ -795,16 +795,21 @@ private fun MainHeader(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    LocationNotesButton(
-                        viewModel = viewModel,
-                        onClick = onLocationNotesClick
-                    )
+                    // MeshUp: Internet opt-in gate (Decision 013) - location channels/notes need Internet
+                    val internetEnabled by com.bitchat.android.meshup.settings.InternetGate.enabled
+                        .collectAsStateWithLifecycle()
+                    if (internetEnabled) {
+                        LocationNotesButton(
+                            viewModel = viewModel,
+                            onClick = onLocationNotesClick
+                        )
 
-                    LocationChannelsButton(
-                        viewModel = viewModel,
-                        onClick = onLocationChannelsClick,
-                        showLabel = crowdingMode != HeaderCrowdingMode.IconOnlyLocationChannel
-                    )
+                        LocationChannelsButton(
+                            viewModel = viewModel,
+                            onClick = onLocationChannelsClick,
+                            showLabel = crowdingMode != HeaderCrowdingMode.IconOnlyLocationChannel
+                        )
+                    }
                 }
 
                 PeerCounter(

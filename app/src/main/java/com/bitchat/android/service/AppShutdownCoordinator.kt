@@ -62,7 +62,7 @@ object AppShutdownCoordinator {
             // Stop Tor temporarily (do not change user setting)
             val torProvider = ArtiTorManager.getInstance()
             val torStop = async {
-                try { torProvider.applyMode(app, TorMode.OFF) } catch (_: Exception) { }
+                try { torProvider.stopForShutdown(app) } catch (_: Exception) { }
             }
             val conversationFlush = async {
                 try {

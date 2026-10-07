@@ -687,8 +687,11 @@ class MainActivity : OrientationAwareActivity() {
                 PoWPreferenceManager.init(this@MainActivity)
                 
                 // Initialize Location Notes Manager (extracted to separate file)
-                com.bitchat.android.nostr.LocationNotesInitializer.initialize(this@MainActivity)
-                
+                // MeshUp: Internet opt-in gate (Decision 013)
+                if (com.bitchat.android.meshup.settings.InternetGate.isEnabled()) {
+                    com.bitchat.android.nostr.LocationNotesInitializer.initialize(this@MainActivity)
+                }
+
                 // Ensure all permissions are still granted (user might have revoked in settings)
                 if (!permissionManager.areAllPermissionsGranted()) {
                     val missing = permissionManager.getMissingPermissions()

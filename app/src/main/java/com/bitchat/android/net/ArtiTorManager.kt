@@ -144,7 +144,8 @@ class ArtiTorManager private constructor() {
                 .setLogListener(logListener)
                 .build()
 
-            val savedMode = TorPreferenceManager.get(application)
+            // MeshUp: Internet opt-in gate (Decision 013) - tor_mode pref is untouched; effective mode is OFF while gated
+            val savedMode = gatedMode(TorPreferenceManager.get(application))
             if (savedMode == TorMode.ON) {
                 if (currentSocksPort < DEFAULT_SOCKS_PORT) {
                     currentSocksPort = DEFAULT_SOCKS_PORT
@@ -157,15 +158,32 @@ class ArtiTorManager private constructor() {
                 }  // Only reset OkHttp during init
             }
             appScope.launch {
-                applyMode(application, savedMode)
+                reconcile(application)
             }
 
             appScope.launch {
-                TorPreferenceManager.modeFlow.collect { mode ->
-                    applyMode(application, mode)
+                TorPreferenceManager.modeFlow.collect { _ ->
+                    reconcile(application)
                 }
             }
         }
+    }
+
+    // MeshUp: Internet opt-in gate (Decision 013)
+    private fun gatedMode(mode: TorMode): TorMode =
+        if (mode == TorMode.ON && !com.bitchat.android.meshup.settings.InternetGate.isEnabled()) TorMode.OFF else mode
+
+    /**
+     * MeshUp: Internet opt-in gate (Decision 013). Called synchronously when the gate turns ON so the
+     * SOCKS route is published (fail-closed) before any component can connect; Arti itself is started
+     * afterwards via [reconcile].
+     */
+    fun reserveRouteForGate(application: Application) {
+        if (!com.bitchat.android.meshup.settings.InternetGate.isEnabled()) return
+        if (TorPreferenceManager.get(application) != TorMode.ON) return
+        if (currentSocksPort < DEFAULT_SOCKS_PORT) currentSocksPort = DEFAULT_SOCKS_PORT
+        socksAddr = InetSocketAddress("127.0.0.1", currentSocksPort)
+        try { OkHttpProvider.reset() } catch (_: Throwable) { }
     }
 
     fun currentSocksAddress(): InetSocketAddress? = socksAddr
@@ -191,8 +209,26 @@ class ArtiTorManager private constructor() {
         } ?: false
     }
 
-    suspend fun applyMode(application: Application, mode: TorMode) {
+    // MeshUp: Internet opt-in gate (Decision 013) - the ONLY Tor start/stop entry points. The effective
+    // mode is computed inside the mutex from CURRENT state (pref + gate), so a stale queued pass can
+    // never undo a newer one (e.g. publish a null SOCKS route after opt-in).
+    suspend fun reconcile(application: Application) {
         applyMutex.withLock {
+            applyLocked(application, gatedMode(TorPreferenceManager.get(application)))
+        }
+    }
+
+    /** Explicit stop for process shutdown only (does not change the user setting). */
+    suspend fun stopForShutdown(application: Application) {
+        applyMutex.withLock { applyLocked(application, TorMode.OFF) }
+    }
+
+    /** Effective mode for current state; exposed for tests. */
+    internal fun effectiveMode(application: Application): TorMode =
+        gatedMode(TorPreferenceManager.get(application))
+
+    private suspend fun applyLocked(application: Application, mode: TorMode) {
+        run {
             try {
                 desiredMode = mode
                 lastMode = mode
@@ -204,6 +240,13 @@ class ArtiTorManager private constructor() {
                 }
                 when (mode) {
                     TorMode.OFF -> {
+                        // MeshUp: never started (cold start while gated) -> nothing to stop or wait for
+                        if (lifecycleState == LifecycleState.STOPPED && s.state == TorState.OFF) {
+                            val hadRoute = socksAddr != null
+                            socksAddr = null
+                            if (hadRoute) resetNetworkConnections()
+                            return
+                        }
                         Log.i(TAG, "applyMode: OFF -> stopping tor")
                         lifecycleState = LifecycleState.STOPPING
                         _statusFlow.value = _statusFlow.value.copy(

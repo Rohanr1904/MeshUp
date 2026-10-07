@@ -19,10 +19,12 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Routes messages between local mesh transports and Nostr, matching iOS behavior.
  */
-class MessageRouter private constructor(
+class MessageRouter internal constructor(
     private val context: Context,
     private var mesh: MeshService,
-    private val nostr: NostrTransport
+    private val nostr: NostrTransport,
+    // MeshUp: Internet opt-in gate (Decision 013) - injectable so the route table is unit-testable
+    private val internetEnabled: () -> Boolean = { com.bitchat.android.meshup.settings.InternetGate.isEnabled() }
 ) {
     enum class RouteResult {
         MESH,
@@ -123,6 +125,8 @@ class MessageRouter private constructor(
         val nostrTarget = resolution.noiseKeyHex ?: toPeerID
 
         if (com.bitchat.android.nostr.GeohashAliasRegistry.contains(toPeerID)) {
+            // MeshUp: Internet opt-in gate (Decision 013) - geohash DMs are Nostr-only; drop while OFF
+            if (!internetEnabled()) return RouteResult.DROPPED
             Log.d(TAG, "Routing PM via Nostr (geohash) to alias ${toPeerID.take(12)}… id=${messageID.take(8)}…")
             val recipientHex = com.bitchat.android.nostr.GeohashAliasRegistry.get(toPeerID)
             if (recipientHex != null) {
@@ -158,7 +162,7 @@ class MessageRouter private constructor(
         if (meshTarget != null && isReady(mesh, meshTarget)) {
             Log.d(TAG, "Routing READ via mesh to ${meshTarget.take(8)}… id=${receipt.originalMessageID.take(8)}…")
             mesh.sendReadReceipt(receipt.originalMessageID, meshTarget, mesh.getPeerNicknames()[meshTarget] ?: mesh.myPeerID)
-        } else {
+        } else if (internetEnabled()) { // MeshUp: Internet opt-in gate (Decision 013)
             Log.d(TAG, "Routing READ via Nostr to ${toPeerID.take(8)}… id=${receipt.originalMessageID.take(8)}…")
             nostr.sendReadReceipt(receipt, nostrTarget)
         }
@@ -167,7 +171,9 @@ class MessageRouter private constructor(
     fun sendDeliveryAck(messageID: String, toPeerID: String) {
         // Mesh delivery ACKs are sent by the receiver automatically.
         // Only route via Nostr when mesh path isn't available or when this is a geohash alias
+        // MeshUp: Internet opt-in gate (Decision 013) - every remaining path here is Nostr-only
         if (com.bitchat.android.nostr.GeohashAliasRegistry.contains(toPeerID)) {
+            if (!internetEnabled()) return
             val recipientHex = com.bitchat.android.nostr.GeohashAliasRegistry.get(toPeerID)
             if (recipientHex != null) {
                 nostr.sendDeliveryAckGeohash(messageID, recipientHex, try { com.bitchat.android.nostr.NostrIdentityBridge.getCurrentNostrIdentity(context)!! } catch (_: Exception) { return })
@@ -176,7 +182,7 @@ class MessageRouter private constructor(
         }
         val resolution = ContactDirectory.resolve(toPeerID)
         val meshTarget = resolution.meshPeerID ?: toPeerID.takeIf { ContactIdentityResolver.isMeshPeerId(it) }
-        if (!(meshTarget != null && (mesh.getPeerInfo(meshTarget)?.isConnected == true) && mesh.hasEstablishedSession(meshTarget))) {
+        if (internetEnabled() && !(meshTarget != null && (mesh.getPeerInfo(meshTarget)?.isConnected == true) && mesh.hasEstablishedSession(meshTarget))) {
             nostr.sendDeliveryAck(messageID, resolution.noiseKeyHex ?: toPeerID)
         }
     }
@@ -189,7 +195,7 @@ class MessageRouter private constructor(
             val content = FavoriteControlMessage.encode(isFavorite, myNpub)
             val nickname = mesh.getPeerNicknames()[meshTarget] ?: meshTarget
             mesh.sendPrivateMessage(content, meshTarget, nickname, null)
-        } else {
+        } else if (internetEnabled()) { // MeshUp: Internet opt-in gate (Decision 013)
             nostr.sendFavoriteNotification(resolution.noiseKeyHex ?: toPeerID, isFavorite)
         }
     }
@@ -341,6 +347,8 @@ class MessageRouter private constructor(
     }
 
     private fun canSendViaNostr(peerID: String): Boolean {
+        // MeshUp: Internet opt-in gate (Decision 013) - OFF means offline favourites take the QUEUED path
+        if (!internetEnabled()) return false
         return try {
             val resolution = ContactDirectory.resolve(peerID)
             if (resolution.isMutualFavorite && resolution.nostrPubkey != null) return true

@@ -44,7 +44,9 @@ internal fun channelForGeohash(geohash: String): GeohashChannel {
     return GeohashChannel(level, geohash.lowercase())
 }
 
+// MeshUp: Internet opt-in gate (Decision 013) - geohash channels need Internet
 internal fun navigateToGeohash(context: Context, geohash: String): Boolean =
+    if (!com.bitchat.android.meshup.settings.InternetGate.isEnabled()) false else
     runCatching {
         val locationManager = LocationChannelManager.getInstance(context)
         locationManager.selectManual(channelForGeohash(geohash))

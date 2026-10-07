@@ -13,6 +13,13 @@ class BitchatApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // MeshUp: Internet opt-in gate (Decision 013) - must be bound before any component that can
+        // open a network connection. Fail-closed (OFF) if reading the setting fails.
+        val internetEnabled = try {
+            com.bitchat.android.meshup.settings.InternetGate.initialize(this)
+            com.bitchat.android.meshup.settings.InternetGate.isEnabled()
+        } catch (_: Exception) { false }
+
         // Start the single process-wide power policy before transport components are constructed.
         com.bitchat.android.mesh.PowerManager.getInstance(this).start()
 
@@ -23,10 +30,15 @@ class BitchatApplication : Application() {
         } catch (_: Exception){}
 
         // Initialize relay directory (loads assets/nostr_relays.csv)
-        RelayDirectory.initialize(this)
+        // MeshUp: Internet opt-in gate (Decision 013) - RelayDirectory can download a relay list, so
+        // it starts only when Internet is on (InternetController starts it on opt-in).
+        if (internetEnabled) RelayDirectory.initialize(this)
 
         // Initialize LocationNotesManager dependencies early so sheet subscriptions can start immediately
-        try { com.bitchat.android.nostr.LocationNotesInitializer.initialize(this) } catch (_: Exception) { }
+        // MeshUp: Internet opt-in gate (Decision 013)
+        if (internetEnabled) {
+            try { com.bitchat.android.nostr.LocationNotesInitializer.initialize(this) } catch (_: Exception) { }
+        }
 
         // Initialize favorites persistence early so MessageRouter/NostrTransport can use it on startup
         try {
@@ -68,7 +80,19 @@ class BitchatApplication : Application() {
 
         // Own relay connectivity, selected-channel subscriptions, and presence scheduling at the
         // process level so closing the Activity does not disconnect Nostr.
-        try { com.bitchat.android.nostr.NostrBackgroundRuntime.initialize(this) } catch (_: Exception) { }
+        // MeshUp: Internet opt-in gate (Decision 013)
+        if (internetEnabled) {
+            try { com.bitchat.android.nostr.NostrBackgroundRuntime.initialize(this) } catch (_: Exception) { }
+        } else {
+            // A persisted geohash selection must not be restored while Internet is off.
+            try {
+                com.bitchat.android.geohash.LocationChannelManager.getInstance(this)
+                    .select(com.bitchat.android.geohash.ChannelID.Mesh)
+            } catch (_: Exception) { }
+        }
+
+        // MeshUp: Internet opt-in gate (Decision 013) - react to runtime toggles from here on
+        try { com.bitchat.android.meshup.settings.InternetController.startForApp(this) } catch (_: Exception) { }
 
         // Initialize mesh service preferences
         try { com.bitchat.android.service.MeshServicePreferences.init(this) } catch (_: Exception) { }
