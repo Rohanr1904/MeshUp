@@ -37,7 +37,7 @@ class MeshUpShellTest {
     private val rooms = object : RoomService {
         override val rooms: StateFlow<List<Room>> =
             MutableStateFlow(listOf(Room("#general", 0, true, false)))
-        override fun joinRoom(name: String) = true
+        override fun joinRoom(name: String) = com.bitchat.android.meshup.service.JoinResult.JOINED
         override fun leaveRoom(name: String) {}
     }
 

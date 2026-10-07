@@ -17,6 +17,11 @@
     <string name="meshup_room_name_hint">Room name</string>
     <string name="meshup_room_join">Join</string>
     <string name="meshup_room_leave">Leave</string>
+    <string name="meshup_room_unread">%1$d unread messages</string>
+    <string name="meshup_room_password_unsupported">Password rooms are not supported yet</string>
+    <string name="meshup_room_error_invalid">Enter a room name without spaces</string>
+    <string name="meshup_room_error_password">This room needs a password. Password rooms are not supported yet.</string>
+    <string name="meshup_room_error_rejected">Could not join this room</string>
     <string name="meshup_profile_display_name">Display name</string>
     <string name="meshup_name_step_title">Choose a display name</string>
     <string name="meshup_name_step_body">This name is visible to people nearby. You can change it any time.</string>
