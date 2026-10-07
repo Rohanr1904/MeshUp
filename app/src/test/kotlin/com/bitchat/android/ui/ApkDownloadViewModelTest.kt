@@ -41,12 +41,15 @@ class ApkDownloadViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // Existing tests exercise the Internet-on path (Decision 013 gate is fail-closed by default).
+        com.bitchat.android.meshup.settings.InternetGate.initialize(MutableStateFlow(true))
         application = ApplicationProvider.getApplicationContext()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        com.bitchat.android.meshup.settings.InternetGate.resetForTesting()
     }
 
     @Test

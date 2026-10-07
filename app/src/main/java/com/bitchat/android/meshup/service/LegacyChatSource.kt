@@ -22,6 +22,12 @@ interface LegacyChatSource {
     fun joinChannel(name: String): Boolean
     fun leaveChannel(name: String)
     suspend fun startPrivateChat(peerId: String)
+
+    /** Updates the legacy nickname state, persists it and re-announces on the mesh. */
+    fun setNickname(name: String)
+
+    /** Full hex fingerprint of our own identity (callers must shorten it for display). */
+    fun myFingerprint(): String
 }
 
 /** Delegates to the single existing [ChatViewModel] instance. Never passes a channel password. */
@@ -42,4 +48,6 @@ class ChatViewModelSource(private val vm: ChatViewModel) : LegacyChatSource {
     override fun joinChannel(name: String) = vm.joinChannel(name)
     override fun leaveChannel(name: String) = vm.leaveChannel(name)
     override suspend fun startPrivateChat(peerId: String) = vm.startPrivateChat(peerId)
+    override fun setNickname(name: String) = vm.setNickname(name)
+    override fun myFingerprint() = vm.getMyFingerprint()
 }

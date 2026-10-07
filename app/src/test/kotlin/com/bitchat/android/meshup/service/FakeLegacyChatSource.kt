@@ -21,10 +21,14 @@ class FakeLegacyChatSource : LegacyChatSource {
     val left = mutableListOf<String>()
     val started = mutableListOf<String>()
     var joinResult = true
+    val nicknamesSet = mutableListOf<String>()
+    var fingerprint = "0123456789abcdef0123456789abcdef"
 
     override fun isFavorite(peerId: String) = peerId in favoriteFingerprints
     override fun toggleFavorite(peerId: String) { toggled += peerId }
     override fun joinChannel(name: String): Boolean { joined += name; return joinResult }
     override fun leaveChannel(name: String) { left += name }
     override suspend fun startPrivateChat(peerId: String) { started += peerId }
+    override fun setNickname(name: String) { nicknamesSet += name; nickname.value = name }
+    override fun myFingerprint() = fingerprint
 }

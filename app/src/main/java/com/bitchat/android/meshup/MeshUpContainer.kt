@@ -1,5 +1,8 @@
 package com.bitchat.android.meshup
 
+import android.content.Context
+import com.bitchat.android.meshup.profile.ProfileManager
+import com.bitchat.android.meshup.profile.ProfileRepository
 import com.bitchat.android.meshup.service.ChannelRoomService
 import com.bitchat.android.meshup.service.ChatViewModelMessagingService
 import com.bitchat.android.meshup.service.ChatViewModelPeopleService
@@ -14,15 +17,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 
 /** Manual DI (P1-8). Adapters wrap the single existing ChatViewModel; never create a second one. */
-class MeshUpContainer(source: LegacyChatSource, scope: CoroutineScope) {
+class MeshUpContainer(source: LegacyChatSource, scope: CoroutineScope, profileRepository: ProfileRepository) {
     val messaging: MessagingService = ChatViewModelMessagingService(source, scope)
     val people: PeopleService = ChatViewModelPeopleService(source, scope)
     val rooms: RoomService = ChannelRoomService(source, scope)
     val displayName: StateFlow<String> = source.nickname
     val shell = MeshUpShellState()
+    val profile = ProfileManager(profileRepository, source)
 
     companion object {
-        fun create(chatViewModel: ChatViewModel, scope: CoroutineScope) =
-            MeshUpContainer(ChatViewModelSource(chatViewModel), scope)
+        fun create(context: Context, chatViewModel: ChatViewModel, scope: CoroutineScope) =
+            MeshUpContainer(ChatViewModelSource(chatViewModel), scope, ProfileRepository.create(context))
     }
 }

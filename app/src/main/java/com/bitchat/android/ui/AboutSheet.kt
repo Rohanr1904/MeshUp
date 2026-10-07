@@ -516,6 +516,7 @@ fun AboutSheet(
                         val torProvider = remember { ArtiTorManager.getInstance() }
                         val torStatus by torProvider.statusFlow.collectAsState()
                         val torAvailable = remember { torProvider.isTorAvailable() }
+                        val internetOn by com.bitchat.android.meshup.settings.InternetGate.enabled.collectAsState() // MeshUp: Internet opt-in gate (Decision 013)
 
                         Column {
                             AboutSectionLabel(text = stringResource(R.string.about_section_settings))
@@ -582,6 +583,8 @@ fun AboutSheet(
                                         color = colorScheme.outlineVariant
                                     )
 
+                                    // MeshUp: Internet opt-in gate (Decision 013) - Tor is meaningless while Internet is off
+                                    if (internetOn) {
                                     // Tor Toggle
                                     SettingsToggleRow(
                                         icon = Icons.Filled.Security,
@@ -615,6 +618,7 @@ fun AboutSheet(
                                         modifier = Modifier.padding(start = 56.dp),
                                         color = colorScheme.outline.copy(alpha = 0.12f)
                                     )
+                                    } // MeshUp: Internet opt-in gate (Decision 013)
 
                                     // === Prepare App for Sharing Section ===
                                     val apkViewModel: ApkDownloadViewModel = viewModel()
@@ -629,7 +633,7 @@ fun AboutSheet(
                                         else -> null
                                     }
                                     val availableUpdate = (releaseStatus as? ApkReleaseStatus.Known)
-                                        ?.takeIf { it.isNewerThanSharedApk }
+                                        ?.takeIf { it.isNewerThanSharedApk && internetOn } // MeshUp: Internet opt-in gate (Decision 013)
 
                                     // Handle one-shot effects (navigation, toasts, share intents)
                                     LaunchedEffect(Unit) {
@@ -660,6 +664,8 @@ fun AboutSheet(
                                         }
                                     }
 
+                                    // MeshUp: Internet opt-in gate (Decision 013) - hide the update/download row while Internet is off
+                                    if (internetOn || shareableApk != null) {
                                     // Prepare App for Sharing Row
                                     Row(
                                         modifier = Modifier
@@ -870,6 +876,7 @@ fun AboutSheet(
                                             else -> {}
                                         }
                                     }
+                                    } // MeshUp: Internet opt-in gate (Decision 013)
 
                                     // Prepare Dialog
                                     if (apkUiState.showPrepareDialog) {
