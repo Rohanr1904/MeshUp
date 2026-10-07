@@ -291,6 +291,8 @@ class ApkDownloadViewModel internal constructor(
     }
 
     private fun startDownload() {
+        // MeshUp: Internet opt-in gate (Decision 013) - no APK download while Internet is off
+        if (!com.bitchat.android.meshup.settings.InternetGate.isEnabled()) return
         val current = _state.value.apkStatus
         val fallback = when (current) {
             is ApkPreparationStatus.Ready -> current
@@ -350,6 +352,8 @@ class ApkDownloadViewModel internal constructor(
     }
 
     private fun refreshReleaseMetadata() {
+        // MeshUp: Internet opt-in gate (Decision 013) - no update check while Internet is off
+        if (!com.bitchat.android.meshup.settings.InternetGate.isEnabled()) return
         if (metadataRefreshJob?.isActive == true) return
         metadataRefreshJob = viewModelScope.launch {
             _state.update { it.copy(releaseStatus = ApkReleaseStatus.Checking) }

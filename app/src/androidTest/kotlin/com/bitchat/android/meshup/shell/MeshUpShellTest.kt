@@ -10,6 +10,8 @@ import androidx.compose.ui.test.performClick
 import com.bitchat.android.meshup.domain.Person
 import com.bitchat.android.meshup.domain.Reachability
 import com.bitchat.android.meshup.domain.Room
+import com.bitchat.android.meshup.service.AndroidTestChatSource
+import androidx.test.platform.app.InstrumentationRegistry
 import com.bitchat.android.meshup.service.MessagingService
 import com.bitchat.android.meshup.service.PeopleService
 import com.bitchat.android.meshup.service.RoomService
@@ -46,7 +48,11 @@ class MeshUpShellTest {
                 messaging = messaging,
                 people = people,
                 rooms = rooms,
-                displayName = MutableStateFlow("Tester")
+                profile = AndroidTestChatSource.profile(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    AndroidTestChatSource("Tester"),
+                    confirmed = true
+                )
             ) { Text("stub chats") }
         }
     }

@@ -73,7 +73,7 @@ class MainActivity : OrientationAwareActivity() {
     }
     // Adapters over the single chatViewModel; lazy so it is first touched after mesh init.
     private val meshUpContainer: MeshUpContainer by lazy {
-        MeshUpContainer.create(chatViewModel, lifecycleScope)
+        MeshUpContainer.create(applicationContext, chatViewModel, lifecycleScope)
     }
 
     private val forceFinishReceiver = object : android.content.BroadcastReceiver() {

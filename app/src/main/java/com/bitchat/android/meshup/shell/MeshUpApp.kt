@@ -1,5 +1,6 @@
 package com.bitchat.android.meshup.shell
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,12 +55,12 @@ import androidx.navigation.compose.rememberNavController
 import com.bitchat.android.R
 import com.bitchat.android.meshup.MeshUpContainer
 import com.bitchat.android.meshup.domain.Reachability
+import com.bitchat.android.meshup.profile.ProfileManager
 import com.bitchat.android.meshup.service.MessagingService
 import com.bitchat.android.meshup.service.PeopleService
 import com.bitchat.android.meshup.service.RoomService
 import com.bitchat.android.ui.ChatScreen
 import com.bitchat.android.ui.ChatViewModel
-import kotlinx.coroutines.flow.StateFlow
 
 /** Production entry point: Chats tab hosts the legacy [ChatScreen] on the single [chatViewModel]. */
 @Composable
@@ -69,7 +70,7 @@ fun MeshUpApp(container: MeshUpContainer, chatViewModel: ChatViewModel, modifier
         messaging = container.messaging,
         people = container.people,
         rooms = container.rooms,
-        displayName = container.displayName,
+        profile = container.profile,
         modifier = modifier,
         chatsContent = { ChatScreen(viewModel = chatViewModel) }
     )
@@ -82,10 +83,17 @@ fun MeshUpApp(
     messaging: MessagingService,
     people: PeopleService,
     rooms: RoomService,
-    displayName: StateFlow<String>,
+    profile: ProfileManager,
     modifier: Modifier = Modifier,
     chatsContent: @Composable () -> Unit
 ) {
+    // Name step gate (P1-5): shown once, after permissions, until the name is confirmed.
+    val nameConfirmed by profile.nameConfirmed.collectAsState()
+    if (!nameConfirmed) {
+        NameStepScreen(profile, modifier.background(MaterialTheme.colorScheme.background))
+        return
+    }
+
     val navController = rememberNavController()
     val tab = shell.tab
 
@@ -133,7 +141,7 @@ fun MeshUpApp(
                 }
             }
             composable(MeshUpTab.PROFILE.route) {
-                Box(Modifier.windowInsetsPadding(WindowInsets.statusBars)) { ProfileScreen(displayName) }
+                Box(Modifier.windowInsetsPadding(WindowInsets.statusBars)) { ProfileScreen(profile) }
             }
         }
 
@@ -277,14 +285,3 @@ private fun RoomsScreen(vm: RoomsViewModel, onOpened: () -> Unit) {
     }
 }
 
-@Composable
-private fun ProfileScreen(displayName: StateFlow<String>) {
-    val name by displayName.collectAsState()
-    Column(
-        Modifier.fillMaxSize().testTag("screen_profile").padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(stringResource(R.string.meshup_profile_display_name), style = MaterialTheme.typography.labelMedium)
-        Text(name, style = MaterialTheme.typography.headlineSmall)
-    }
-}
