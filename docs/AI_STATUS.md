@@ -17,7 +17,7 @@ Phase 0.5 — Baseline: **COMPLETE**, TD-29 confirmed Windows-only via CI. Phase
 - None. Open items carried forward:
   - PR-3: `MessagingService.sendMessage` targets the legacy "currently selected" context; consider an explicit `peerId` target.
   - PR-4: Settings switch must toggle via `InternetGate.setEnabled(...)` (single process-wide `NetworkSettings`); hide About-sheet update/Tor controls while OFF (review L3).
-  - **Decision pending (owner): M3** ML Kit barcode-scanning bundles `datatransport` CCT telemetry that bypasses the OkHttp gate (QR verification is usable while OFF). Options: accept as documented exception now and replace with an offline QR decoder later (chief recommendation), or strip the backend (lockfile change).
+  - M3 ML Kit telemetry: accepted as a known exception (Decision 013 addendum); follow-up: offline QR decoder.
   - Residuals from PR-2 review: read receipts / favourite notifications are dropped (not queued) while OFF (L2); `ChatViewModel` ignores DROPPED for geohash DMs; brief Tor-start window if the gate flips OFF during an ON reconcile (relays stay blocked).
 
 ## Blockers
@@ -36,7 +36,7 @@ Phase 0.5 — Baseline: **COMPLETE**, TD-29 confirmed Windows-only via CI. Phase
 
 ## Next Action
 1. Working copy is now `C:\dev\MeshUp` (the OneDrive copy is stale from PR-1 onward).
-2. Owner: decide M3 (ML Kit telemetry); decide push/PR for the stacked branches. Then PR-3 (app shell + adapters).
+2. PR-1 and PR-2 pushed as stacked PRs; next PR-3 (app shell + adapters).
 
 
 ## Last Updated
