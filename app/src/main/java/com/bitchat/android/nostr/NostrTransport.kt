@@ -390,7 +390,7 @@ class NostrTransport(
         val fromIdentity = try {
             NostrIdentityBridge.deriveIdentity(geohash, context)
         } catch (e: Exception) {
-            Log.e(TAG, "NostrTransport: cannot derive geohash identity for $geohash: ${e.message}")
+            Log.e(TAG, "NostrTransport: cannot derive geohash identity for ${com.bitchat.android.util.Redact.id(geohash)}: ${e.message}")
             return
         }
         

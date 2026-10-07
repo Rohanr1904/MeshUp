@@ -115,6 +115,7 @@ val sharedSourceIncludes = listOf(
     "com/bitchat/android/util/AppConstants.kt",
     "com/bitchat/android/util/ByteArrayExtensions.kt",
     "com/bitchat/android/util/ByteArrayWrapper.kt",
+    "com/bitchat/android/util/Redact.kt",
     "com/bitchat/android/util/BinaryEncodingUtils.kt",
 )
 val sharedSourceExcludes = listOf(

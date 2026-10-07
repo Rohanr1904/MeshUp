@@ -2,6 +2,11 @@ package com.bitchat.android.noise
 
 import android.content.Context
 import android.util.Log
+import com.bitchat.android.identity.IdentityHealth
+import com.bitchat.android.identity.IdentityIssue
+import com.bitchat.android.identity.IdentityIssueReason
+import com.bitchat.android.identity.IdentityKeyKind
+import com.bitchat.android.identity.KeyLoadResult
 import com.bitchat.android.identity.SecureIdentityStateManager
 import com.bitchat.android.mesh.PeerFingerprintManager
 import com.bitchat.android.noise.southernstorm.protocol.Noise
@@ -18,7 +23,10 @@ import java.util.concurrent.ConcurrentHashMap
  * - Channel encryption using password-derived keys
  * - Peer fingerprint mapping and identity persistence
  */
-class NoiseEncryptionService(private val context: Context) {
+class NoiseEncryptionService(
+    private val context: Context,
+    identityStateManagerOverride: SecureIdentityStateManager? = null
+) {
     
     companion object {
         private const val TAG = "NoiseEncryptionService"
@@ -54,7 +62,7 @@ class NoiseEncryptionService(private val context: Context) {
     
     init {
         // Initialize identity state manager for persistent storage
-        identityStateManager = SecureIdentityStateManager(context)
+        identityStateManager = identityStateManagerOverride ?: SecureIdentityStateManager(context)
         
         // Load or create keys - temporary placeholders
         staticIdentityPrivateKey = ByteArray(32)
@@ -83,35 +91,56 @@ class NoiseEncryptionService(private val context: Context) {
     }
     
     private fun loadOrGenerateKeys() {
-        // Load or create static identity key (persistent across sessions)
-        val loadedKeyPair = identityStateManager.loadStaticKey()
-        if (loadedKeyPair != null) {
-            staticIdentityPrivateKey = loadedKeyPair.first
-            staticIdentityPublicKey = loadedKeyPair.second
-            Log.d(TAG, "Identity loaded: ${calculateFingerprint(staticIdentityPublicKey).take(16)}")
-        } else {
-            // Generate new identity key pair
-            val keyPair = generateKeyPair()
-            staticIdentityPrivateKey = keyPair.first
-            staticIdentityPublicKey = keyPair.second
-            
-            // Save to secure storage
-            identityStateManager.saveStaticKey(staticIdentityPrivateKey, staticIdentityPublicKey)
+        // Static identity key (persistent across sessions)
+        when (val r = identityStateManager.loadStaticKeyResult()) {
+            is KeyLoadResult.Loaded -> {
+                staticIdentityPrivateKey = r.privateKey
+                staticIdentityPublicKey = r.publicKey
+                Log.d(TAG, "Identity loaded: ${calculateFingerprint(staticIdentityPublicKey).take(16)}")
+            }
+            else -> {
+                if (r is KeyLoadResult.Unreadable) {
+                    // Never silently replace: keep the old blob, then tell the UI.
+                    val backedUp = identityStateManager.backupUnreadableStaticKey()
+                    IdentityHealth.report(
+                        IdentityIssue(IdentityIssueReason.UNREADABLE, IdentityKeyKind.NOISE_STATIC, backedUp), context
+                    )
+                }
+                val keyPair = generateKeyPair()
+                staticIdentityPrivateKey = keyPair.first
+                staticIdentityPublicKey = keyPair.second
+                try {
+                    identityStateManager.saveStaticKey(staticIdentityPrivateKey, staticIdentityPublicKey)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Static identity key was not persisted")
+                    IdentityHealth.report(IdentityIssue(IdentityIssueReason.NOT_PERSISTED, IdentityKeyKind.NOISE_STATIC), context)
+                }
+            }
         }
-        
-        // Load or create Ed25519 signing key (persistent across sessions)
-        val loadedSigningKeyPair = identityStateManager.loadSigningKey()
-        if (loadedSigningKeyPair != null) {
-            signingPrivateKey = loadedSigningKeyPair.first
-            signingPublicKey = loadedSigningKeyPair.second
-        } else {
-            // Generate new Ed25519 signing key pair
-            val signingKeyPair = generateEd25519KeyPair()
-            signingPrivateKey = signingKeyPair.first
-            signingPublicKey = signingKeyPair.second
-            
-            // Save to secure storage
-            identityStateManager.saveSigningKey(signingPrivateKey, signingPublicKey)
+
+        // Ed25519 signing key (persistent across sessions)
+        when (val r = identityStateManager.loadSigningKeyResult()) {
+            is KeyLoadResult.Loaded -> {
+                signingPrivateKey = r.privateKey
+                signingPublicKey = r.publicKey
+            }
+            else -> {
+                if (r is KeyLoadResult.Unreadable) {
+                    val backedUp = identityStateManager.backupUnreadableSigningKey()
+                    IdentityHealth.report(
+                        IdentityIssue(IdentityIssueReason.UNREADABLE, IdentityKeyKind.NOISE_SIGNING, backedUp), context
+                    )
+                }
+                val signingKeyPair = generateEd25519KeyPair()
+                signingPrivateKey = signingKeyPair.first
+                signingPublicKey = signingKeyPair.second
+                try {
+                    identityStateManager.saveSigningKey(signingPrivateKey, signingPublicKey)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Signing key was not persisted")
+                    IdentityHealth.report(IdentityIssue(IdentityIssueReason.NOT_PERSISTED, IdentityKeyKind.NOISE_SIGNING), context)
+                }
+            }
         }
     }
 
@@ -162,8 +191,9 @@ class NoiseEncryptionService(private val context: Context) {
     fun clearPersistentIdentity() {
         Log.w(TAG, "Panic: clearing persistent identity and rotating in-memory keys")
         
-        // 1. Clear storage
+        // 1. Clear storage (and the persisted identity-warning markers)
         identityStateManager.clearIdentityData()
+        runCatching { IdentityHealth.reset(context) } // never let this block the identity wipe
         
         // 2. Clear all sessions immediately
         if (::sessionManager.isInitialized) {
@@ -448,20 +478,6 @@ class NoiseEncryptionService(private val context: Context) {
     }
     
     // MARK: - Packet Signing/Verification
-
-    /**
-     * Sign a BitchatPacket using our Ed25519 signing key
-     */
-    fun signPacket(packet: com.bitchat.android.protocol.BitchatPacket): com.bitchat.android.protocol.BitchatPacket? {
-        // Create canonical packet bytes for signing
-        val packetData = packet.toBinaryDataForSigning() ?: return null
-        
-        // Sign with our Ed25519 signing private key
-        val signature = signData(packetData) ?: return null
-        
-        // Return new packet with signature
-        return packet.copy(signature = signature)
-    }
 
     /**
      * Verify a BitchatPacket signature using the provided public key

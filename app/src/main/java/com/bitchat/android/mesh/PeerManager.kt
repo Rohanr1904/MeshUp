@@ -1,5 +1,6 @@
 package com.bitchat.android.mesh
 
+import com.bitchat.android.util.Redact
 import android.util.Log
 import com.bitchat.android.model.AuthenticatedPeerState
 import com.bitchat.android.model.PeerCapabilities
@@ -255,11 +256,11 @@ class PeerManager {
 
         if (isNewPeer && isVerified) {
             announcedPeers.add(peerID)
-            Log.d(TAG, "🆕 New verified peer: $nickname ($peerID)")
+            Log.d(TAG, "🆕 New verified peer: ${Redact.id(nickname)} (${Redact.id(peerID)})")
         } else if (isVerified) {
-            Log.d(TAG, "🔄 Updated verified peer: $nickname ($peerID)")
+            Log.d(TAG, "🔄 Updated verified peer: ${Redact.id(nickname)} (${Redact.id(peerID)})")
         } else {
-            Log.d(TAG, "⚠️ Unverified peer announcement from: $nickname ($peerID)")
+            Log.d(TAG, "⚠️ Unverified peer announcement from: ${Redact.id(nickname)} (${Redact.id(peerID)})")
         }
 
         if (shouldNotify) {
@@ -364,7 +365,7 @@ class PeerManager {
             notifyPeerListUpdate()
             return true
         }
-        Log.d(TAG, "Updated peer: $peerID ($nickname)")
+        Log.d(TAG, "Updated peer: ${Redact.id(peerID)} (${Redact.id(nickname)})")
         return false
     }
     

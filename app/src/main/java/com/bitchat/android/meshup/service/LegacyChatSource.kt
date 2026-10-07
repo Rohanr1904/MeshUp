@@ -28,6 +28,9 @@ interface LegacyChatSource {
 
     /** Full hex fingerprint of our own identity (callers must shorten it for display). */
     fun myFingerprint(): String
+
+    /** The existing panic wipe (identity, messages, contacts). Same path as the triple-tap. */
+    fun panicClearAllData()
 }
 
 /** Delegates to the single existing [ChatViewModel] instance. Never passes a channel password. */
@@ -50,4 +53,5 @@ class ChatViewModelSource(private val vm: ChatViewModel) : LegacyChatSource {
     override suspend fun startPrivateChat(peerId: String) = vm.startPrivateChat(peerId)
     override fun setNickname(name: String) = vm.setNickname(name)
     override fun myFingerprint() = vm.getMyFingerprint()
+    override fun panicClearAllData() = vm.panicClearAllData()
 }

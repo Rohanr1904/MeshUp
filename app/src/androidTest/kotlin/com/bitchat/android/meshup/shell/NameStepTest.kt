@@ -42,7 +42,7 @@ class NameStepTest {
     }
     private val rooms = object : RoomService {
         override val rooms: StateFlow<List<Room>> = MutableStateFlow(emptyList())
-        override fun joinRoom(name: String) = true
+        override fun joinRoom(name: String) = com.bitchat.android.meshup.service.JoinResult.JOINED
         override fun leaveRoom(name: String) {}
     }
 

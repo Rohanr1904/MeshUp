@@ -313,7 +313,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                     ttl = MAX_TTL
                 )
                 // Sign the handshake response
-                val signedPacket = signPacketBeforeBroadcast(responsePacket)
+                val signedPacket = signPacketBeforeBroadcast(responsePacket) ?: return
                 broadcastRoutedPacket(RoutedPacket(signedPacket))
             }
             
@@ -385,7 +385,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
             // Packet operations
             override fun sendPacket(packet: BitchatPacket) {
                 // Sign the packet before broadcasting
-                val signedPacket = signPacketBeforeBroadcast(packet)
+                val signedPacket = signPacketBeforeBroadcast(packet) ?: return
                 broadcastRoutedPacket(RoutedPacket(signedPacket))
             }
             
@@ -450,7 +450,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                         )
 
                         // Sign the handshake packet before broadcasting
-                        val signedPacket = signPacketBeforeBroadcast(packet)
+                        val signedPacket = signPacketBeforeBroadcast(packet) ?: return
                         broadcastRoutedPacket(RoutedPacket(signedPacket))
                     } else {
                         Log.w(TAG, "Failed to generate Noise handshake data for $peerID")
@@ -871,7 +871,8 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
             )
 
             // Sign the packet before broadcasting
-            val signedPacket = signPacketBeforeBroadcast(packet)
+            // Public broadcast has no per-message delivery status; failure is logged only.
+            val signedPacket = signPacketBeforeBroadcast(packet) ?: return@launch
             broadcastRoutedPacket(RoutedPacket(signedPacket))
             // Track our own broadcast message for sync
             try { gossipSyncManager.onPublicPacketSeen(signedPacket) } catch (_: Exception) { }
@@ -901,7 +902,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
             payload = ciphertext,
             ttl = MAX_TTL
         )
-        val signed = signPacketBeforeBroadcast(packet)
+        val signed = signPacketBeforeBroadcast(packet) ?: return false
         if (signed.signature?.size != 64) return false
         broadcastRoutedPacket(RoutedPacket(signed))
         return true
@@ -925,9 +926,13 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                 signature = null,
                 ttl = MAX_TTL
             )
-            val signed = signPacketBeforeBroadcast(packet)
             // Use a stable transferId based on the file TLV payload for progress tracking
             val transferId = sha256Hex(payload)
+            val signed = signPacketBeforeBroadcast(packet)
+            if (signed == null) {
+                TransferProgressManager.fail(transferId)
+                return@launch
+            }
             broadcastRoutedPacket(RoutedPacket(signed, transferId = transferId))
             try { gossipSyncManager.onPublicPacketSeen(signed) } catch (_: Exception) { }
         }
@@ -990,7 +995,8 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                     ttl = MAX_TTL
                 )
             }
-            broadcastRoutedPacket(RoutedPacket(signPacketBeforeBroadcast(packet)))
+            val signed = signPacketBeforeBroadcast(packet) ?: return
+            broadcastRoutedPacket(RoutedPacket(signed))
         } catch (e: Exception) {
             Log.w(TAG, "Live voice frame send failed: ${e.message}")
         }
@@ -1071,6 +1077,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                     val tlvData = privateMessage.encode()
                     if (tlvData == null) {
                         Log.e(TAG, "Failed to encode private message with TLV")
+                        markPrivateMessageSendFailed(finalMessageID, "Message could not be encoded")
                         return@launch
                     }
                     
@@ -1097,12 +1104,17 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                     
                     // Sign the packet before broadcasting
                     val signedPacket = signPacketBeforeBroadcast(packet)
+                    if (signedPacket == null) {
+                        markPrivateMessageSendFailed(finalMessageID, "Message could not be signed")
+                        return@launch
+                    }
                     broadcastRoutedPacket(RoutedPacket(signedPacket))
 
                     // The UI handles sent messages through its own sending path.
 
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to encrypt private message for $recipientPeerID: ${e.message}")
+                    markPrivateMessageSendFailed(finalMessageID, "Message could not be encrypted")
                 }
             } else {
                 // Fire and forget - initiate handshake but don't queue exactly like iOS
@@ -1153,7 +1165,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                 )
                 
                 // Sign the packet before broadcasting
-                val signedPacket = signPacketBeforeBroadcast(packet)
+                val signedPacket = signPacketBeforeBroadcast(packet) ?: return@launch
                 val retryKey = "$recipientPeerID:$messageID"
                 readReceiptRetrySender.enqueue(
                     key = retryKey,
@@ -1221,7 +1233,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                     ttl = com.bitchat.android.util.AppConstants.MESSAGE_TTL_HOPS
                 )
 
-                val signedPacket = signPacketBeforeBroadcast(packet)
+                val signedPacket = signPacketBeforeBroadcast(packet) ?: return@launch
                 broadcastRoutedPacket(RoutedPacket(signedPacket))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send $label to $recipientPeerID: ${e.message}")
@@ -1280,9 +1292,8 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
             )
             
             // Sign the packet using our signing key (exactly like iOS)
-            val signedPacket = encryptionService.signData(announcePacket.toBinaryDataForSigning()!!)?.let { signature ->
-                announcePacket.copy(signature = signature)
-            } ?: announcePacket
+            // Fail closed: skip this announce; the periodic announce loop retries.
+            val signedPacket = signPacketBeforeBroadcast(announcePacket) ?: return@launch
             
             broadcastRoutedPacket(RoutedPacket(signedPacket))
             // Track announce for sync
@@ -1342,9 +1353,8 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
         )
         
         // Sign the packet using our signing key (exactly like iOS)
-        val signedPacket = encryptionService.signData(packet.toBinaryDataForSigning()!!)?.let { signature ->
-            packet.copy(signature = signature)
-        } ?: packet
+        // Fail closed: skip this announce; the periodic announce loop retries.
+        val signedPacket = signPacketBeforeBroadcast(packet) ?: return
         
         broadcastRoutedPacket(RoutedPacket(signedPacket))
         peerManager.markPeerAsAnnouncedTo(peerID)
@@ -1385,7 +1395,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
         )
         
         // Sign the packet before broadcasting
-        val signedPacket = signPacketBeforeBroadcast(packet)
+        val signedPacket = signPacketBeforeBroadcast(packet) ?: return
         broadcastRoutedPacket(RoutedPacket(signedPacket))
     }
     
@@ -1587,30 +1597,27 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
         return routed.copy(signature = signature)
     }
 
-    private fun signPacketBeforeBroadcast(packet: BitchatPacket): BitchatPacket {
-        return try {
-            // Optionally compute and attach a source route for addressed packets
-            val withRoute = applyRouteIfAvailable(packet)
+    private fun markPrivateMessageSendFailed(messageID: String, reason: String) {
+        try {
+            com.bitchat.android.services.AppStateStore.updatePrivateMessageStatus(
+                messageID,
+                com.bitchat.android.model.DeliveryStatus.Failed(reason)
+            )
+        } catch (_: Exception) { }
+    }
 
-            // Get the canonical packet data for signing (without signature)
-            val packetDataForSigning = withRoute.toBinaryDataForSigning()
-            if (packetDataForSigning == null) {
-                Log.w(TAG, "Failed to encode packet type ${packet.type} for signing, sending unsigned")
-                return withRoute
-            }
-            
-            // Sign the packet data using our signing key
-            val signature = encryptionService.signData(packetDataForSigning)
-            if (signature != null) {
-                withRoute.copy(signature = signature)
-            } else {
-                Log.w(TAG, "Failed to sign packet type ${packet.type}, sending unsigned")
-                withRoute
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error signing packet type ${packet.type}: ${e.message}, sending unsigned")
-            packet
+    /** Fail closed: returns null on any signing failure. Callers must not send. */
+    private fun signPacketBeforeBroadcast(packet: BitchatPacket): BitchatPacket? {
+        val signed = signOrNull(
+            packet,
+            applyRoute = ::applyRouteIfAvailable,
+            encode = { it.toBinaryDataForSigning() },
+            sign = { encryptionService.signData(it) }
+        )
+        if (signed == null) {
+            Log.w(TAG, "Signing failed for packet type ${packet.type}; not sending")
         }
+        return signed
     }
     
     // MARK: - Panic Mode Support
