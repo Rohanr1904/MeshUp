@@ -39,9 +39,9 @@ Phase 0.5 — Baseline: **COMPLETE**, TD-29 confirmed Windows-only via CI. Phase
 - Physical devices: NOT run
 
 ## Next Action
-1. Working copy is now `C:\dev\MeshUp` (the OneDrive copy is stale from PR-1 onward).
-2. PR-1 and PR-2 pushed as stacked PRs; next PR-3 (app shell + adapters).
-
+1. Product owner: approve `docs/IMPLEMENTATION_PLAN_PHASE2.md` and answer decisions D1-D11 (section 6).
+2. Merge PR #5 (Rooms tab) once CI is green.
+3. Then Phase 2 Track A (P2-PR1 replay fix, P2-PR2 TTL clamp, P2-PR3 release log stripping).
 
 ## Last Updated
 2026-10-07
