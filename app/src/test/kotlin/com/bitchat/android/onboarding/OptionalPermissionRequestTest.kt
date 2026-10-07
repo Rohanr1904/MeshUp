@@ -26,6 +26,12 @@ class OptionalPermissionRequestTest {
             .clear()
             .commit()
         shadowOf(application).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        // Location is also an optional permission on API 31+; grant it so these tests stay
+        // focused on notifications.
+        shadowOf(application).grantPermissions(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
     }
 
     @Test
