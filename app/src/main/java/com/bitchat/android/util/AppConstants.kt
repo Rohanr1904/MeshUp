@@ -158,6 +158,17 @@ object AppConstants {
         val HANDSHAKE_RETRY_BACKOFF_MS: LongArray = longArrayOf(5_000L, 15_000L, 30_000L, 60_000L)
     }
 
+    object Release {
+        /** GitHub "owner/repo" slug hosting NearBird releases. Change here if the repo is renamed. */
+        const val GITHUB_REPO: String = "Rohanr1904/MeshUp"
+        const val GITHUB_API_LATEST_URL: String =
+            "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+        const val GITHUB_LATEST_DOWNLOAD_BASE: String =
+            "https://github.com/$GITHUB_REPO/releases/latest/download/"
+        /** Universal APK asset name produced by tools/reproducible-builds/sign-release.sh. */
+        const val UNIVERSAL_APK_ASSET: String = "nearbird-universal.apk"
+    }
+
     object Services {
         const val SEEN_MESSAGE_MAX_IDS: Int = 10_000
     }

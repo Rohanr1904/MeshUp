@@ -57,12 +57,12 @@ printf '%s\n' "$BITCHAT_PLAY_KEY_PASSWORD" > "$KEYPASS_FILE"
 chmod 600 "$STOREPASS_FILE" "$KEYPASS_FILE"
 
 unsigned_names=(
-  "bitchat-android-release-unsigned.aab"
-  "bitchat-android-wear-release-unsigned.aab"
+  "nearbird-release-unsigned.aab"
+  "nearbird-wear-release-unsigned.aab"
 )
 signed_names=(
-  "bitchat-android-play-upload.aab"
-  "bitchat-android-wear-play-upload.aab"
+  "nearbird-play-upload.aab"
+  "nearbird-wear-play-upload.aab"
 )
 
 for ((index = 0; index < ${#unsigned_names[@]}; index++)); do

@@ -110,3 +110,23 @@ Decision:
 Consequences:
 Short expiry favours honest "Failed" states over long background waits; users retry manually (D5). Values live in `AppConstants` so they can be tuned after physical-device testing (Decision 009).
 Amendment (2026-10-08, P2-PR8 review, default per owner preference): a message already handed to the mesh (SENT, awaiting ACK) whose row passes the 1 h bound is removed from the outbox **silently and keeps its status** (it may have been delivered with the ACK lost); only QUEUED messages that were never transmitted become `Failed("Not delivered")`. QUEUED rows count toward D2; SENT rows have their own 200-per-peer cap with oldest-silent eviction.
+
+## Decision 016 — Launch scope: defer non-blocking hardening, gate launch on devices, identity and licence
+Date: 2026-10-08 · Decided by: product owner
+Decision:
+- Finish Phase 2 core before launch: P2-PR8 (durable router), P2-PR9 (ACK-timeout resend, Failed + Retry), P2-PR10 (manifest/permission compliance).
+- **Deferred until after launch:** P2-PR11 (Arti native stop fix; the Settings restart prompt remains the mitigation, so D10 is deferred), the review follow-ups (voice relay delay and private-file save off the stripe consumers, type-specific caps for handshakes/announces, H12 announce dedup bypass, remaining full peer IDs in w/e logs, NoiseSession lock split / receive-side rekey count), and the ML Kit replacement (Decision 013 addendum).
+- **Launch gates (must be done before public release):**
+  1. Physical-device verification on 2–3 Android phones: exactly-once delivery after process kill, multi-hop relay, BLE discovery after the permission change (Decision 009).
+  2. Own app identity: name, applicationId (replacing `com.bitchat.droid`), signing key under the owner's control (Play App Signing recommended), icon, privacy-policy URL; upstream identifiers removed (R-10).
+  3. Licence: distribute under GPLv3 with source available and upstream attribution; README/PRIVACY_POLICY "public domain" statements corrected (Decision 010/011); owner confirms GPLv3 fits the business model, with legal advice if unsure.
+  4. Release pipeline signed with the owner's key via repository secrets; Play forms (data safety, permission declarations) answered from the code.
+- Phase 3 password rooms go before launch only if password rooms are wanted in v1 (the legacy password check is a stub).
+- **Distribution (2026-10-08):** GitHub Releases plus a website download; **no Play Store**. Consequences: the owner holds the release signing key directly (no Play App Signing, so the key must be backed up securely; losing it prevents updates); the in-app update check and hotspot APK sharing stay (resolves D9); Play-specific forms and policies do not apply, but the privacy policy is still published on the website.
+- **App name (2026-10-08): NearBird.** "MeshUp" was dropped because "Meshup: Make Moments" (Meshup Pte. Ltd., iOS, nearby social radar, May 2026) occupies a close space. A web and GitHub search found no messenger named NearBird (only unrelated bird-watching apps/repos); a formal trademark search and domain check remain before release.
+- **Panic wipe (default, 2026-10-08):** the triple-tap emergency wipe stays instant, with no typed confirmation; D7's typed `reset` applies to the deliberate Profile → Reset identity action only.
+- **Owner preference:** product decisions use the proposed defaults; Claude records and reports them. Legal, irreversible-public and credential actions still need the owner.
+- **Application ID: `io.github.rohanr1904.nearbird`** (permanent once released). Kotlin package names stay `com.bitchat.android` (internal, do-not-touch), as do wire-level identifiers (`bitchat://verify`, BLE UUIDs) for BitChat compatibility (Decision 012).
+Consequences:
+Deferred items stay tracked in `docs/AI_STATUS.md`. The app ID and name are permanent once published, so they need explicit owner answers before the change is made.
+

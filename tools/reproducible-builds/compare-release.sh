@@ -8,14 +8,14 @@ SECOND_DIR="${2:?usage: compare-release.sh FIRST_DIR SECOND_DIR}"
 artifacts=(
   BUILDINFO.json
   SHA256SUMS.unsigned
-  bitchat-android-arm64-unsigned.apk
-  bitchat-android-armv7-unsigned.apk
-  bitchat-android-release-unsigned.aab
-  bitchat-android-universal-unsigned.apk
-  bitchat-android-wear-release-unsigned.aab
-  bitchat-android-wear-unsigned.apk
-  bitchat-android-x86-unsigned.apk
-  bitchat-android-x86_64-unsigned.apk
+  nearbird-arm64-unsigned.apk
+  nearbird-armv7-unsigned.apk
+  nearbird-release-unsigned.aab
+  nearbird-universal-unsigned.apk
+  nearbird-wear-release-unsigned.aab
+  nearbird-wear-unsigned.apk
+  nearbird-x86-unsigned.apk
+  nearbird-x86_64-unsigned.apk
 )
 
 for artifact in "${artifacts[@]}"; do

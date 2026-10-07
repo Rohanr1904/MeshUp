@@ -62,7 +62,7 @@ if [ ! -f "$aab_source" ]; then
   echo "error: expected phone release AAB not found" >&2
   exit 1
 fi
-cp "$aab_source" "$OUTPUT_DIR/bitchat-android-release-unsigned.aab"
+cp "$aab_source" "$OUTPUT_DIR/nearbird-release-unsigned.aab"
 
 ./gradlew "${gradle_args[@]}" :wear:clean :wear:bundleRelease
 
@@ -71,17 +71,17 @@ if [ ! -f "$wear_aab_source" ]; then
   echo "error: expected Wear release AAB not found" >&2
   exit 1
 fi
-cp "$wear_aab_source" "$OUTPUT_DIR/bitchat-android-wear-release-unsigned.aab"
+cp "$wear_aab_source" "$OUTPUT_DIR/nearbird-wear-release-unsigned.aab"
 
 # AGP cannot build split APKs and an app bundle from the same intermediates.
 ./gradlew "${gradle_args[@]}" :app:clean :app:assembleRelease
 
 declare -A apk_names=(
-  ["app-arm64-v8a-release-unsigned.apk"]="bitchat-android-arm64-unsigned.apk"
-  ["app-armeabi-v7a-release-unsigned.apk"]="bitchat-android-armv7-unsigned.apk"
-  ["app-universal-release-unsigned.apk"]="bitchat-android-universal-unsigned.apk"
-  ["app-x86-release-unsigned.apk"]="bitchat-android-x86-unsigned.apk"
-  ["app-x86_64-release-unsigned.apk"]="bitchat-android-x86_64-unsigned.apk"
+  ["app-arm64-v8a-release-unsigned.apk"]="nearbird-arm64-unsigned.apk"
+  ["app-armeabi-v7a-release-unsigned.apk"]="nearbird-armv7-unsigned.apk"
+  ["app-universal-release-unsigned.apk"]="nearbird-universal-unsigned.apk"
+  ["app-x86-release-unsigned.apk"]="nearbird-x86-unsigned.apk"
+  ["app-x86_64-release-unsigned.apk"]="nearbird-x86_64-unsigned.apk"
 )
 
 for source_name in "${!apk_names[@]}"; do
@@ -100,7 +100,7 @@ if [ ! -f "$wear_apk_source" ]; then
   echo "error: expected Wear release APK not found" >&2
   exit 1
 fi
-cp "$wear_apk_source" "$OUTPUT_DIR/bitchat-android-wear-unsigned.apk"
+cp "$wear_apk_source" "$OUTPUT_DIR/nearbird-wear-unsigned.apk"
 
 source_commit="${BITCHAT_SOURCE_COMMIT:-$(git -C "$PROJECT_ROOT" rev-parse HEAD)}"
 if ! [[ "$source_commit" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
@@ -128,9 +128,9 @@ EOF
   cd "$OUTPUT_DIR"
   {
     sha256sum BUILDINFO.json
-    sha256sum bitchat-android-*-unsigned.apk
-    sha256sum bitchat-android-release-unsigned.aab
-    sha256sum bitchat-android-wear-release-unsigned.aab
+    sha256sum nearbird-*-unsigned.apk
+    sha256sum nearbird-release-unsigned.aab
+    sha256sum nearbird-wear-release-unsigned.aab
   } | sort -k2 > SHA256SUMS.unsigned
 )
 
