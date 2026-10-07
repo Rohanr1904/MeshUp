@@ -101,11 +101,12 @@ class PermissionManager(private val context: Context) {
             ))
         }
 
-        // Location permissions (required for Bluetooth LE scanning)
-        permissions.addAll(listOf(
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ))
+        // Location permissions are required for BLE scanning only before API 31. On API 31+
+        // BLUETOOTH_SCAN is declared neverForLocation; location is then an optional,
+        // opt-in feature (geohash channels) - see getOptionalPermissions().
+        if (isLocationRequiredForBle()) {
+            permissions.addAll(locationPermissions())
+        }
 
         // Wi‑Fi Aware: Android 13+ requires NEARBY_WIFI_DEVICES runtime permission
         if (shouldRequireWifiAwarePermission()) {
@@ -117,12 +118,27 @@ class PermissionManager(private val context: Context) {
         return permissions
     }
 
+    private fun locationPermissions(): List<String> = listOf(
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
     /**
-     * Background location permission is required on Android 10+ for background BLE scanning.
+     * BLE scanning needs location permission and system location services only on API 26-30.
+     * On API 31+ BLUETOOTH_SCAN (neverForLocation) is sufficient.
+     */
+    fun isLocationRequiredForBle(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+    }
+
+    /**
+     * Background location permission is required only on Android 10-11 (API 29-30) for
+     * background BLE scanning. On API 31+ it is neither declared nor requested.
      * Must be requested after foreground location permissions are granted.
      */
     fun needsBackgroundLocationPermission(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S
     }
 
     fun getBackgroundLocationPermission(): String? {
@@ -144,6 +160,10 @@ class PermissionManager(private val context: Context) {
      */
     fun getOptionalPermissions(): List<String> {
         val optional = mutableListOf<String>()
+        // API 31+: location is optional (location channels); asked once, never blocks onboarding.
+        if (!isLocationRequiredForBle()) {
+            optional.addAll(locationPermissions())
+        }
         // Notifications on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             optional.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -263,15 +283,16 @@ class PermissionManager(private val context: Context) {
         )
 
         // Location category
-        val locationPermissions = listOf(
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
+        val locationPermissions = locationPermissions()
 
         categories.add(
             PermissionCategory(
                 type = PermissionType.PRECISE_LOCATION,
-                description = "Required by Android to discover nearby bitchat users via Bluetooth",
+                description = if (isLocationRequiredForBle()) {
+                    "Required by Android to discover nearby bitchat users via Bluetooth"
+                } else {
+                    "Optional: only used for location channels. Bluetooth discovery works without it"
+                },
                 permissions = locationPermissions,
                 isGranted = locationPermissions.all { isPermissionGranted(it) },
                 systemDescription = "bitchat needs this to scan for nearby devices"

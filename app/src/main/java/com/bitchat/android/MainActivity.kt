@@ -465,6 +465,16 @@ class MainActivity : OrientationAwareActivity() {
      * Check Location services status and proceed with onboarding flow
      */
     private fun checkLocationAndProceed() {
+        // API 31+: BLE no longer needs system location services; skip the location gate.
+        if (!permissionManager.isLocationRequiredForBle()) {
+            if (permissionManager.isFirstTimeLaunch()) {
+                proceedWithPermissionCheck()
+            } else {
+                checkBatteryOptimizationAndProceed()
+            }
+            return
+        }
+
         // For first-time users, skip location check and go straight to permissions
         // We'll check location after permissions are granted
         if (permissionManager.isFirstTimeLaunch()) {
@@ -575,7 +585,7 @@ class MainActivity : OrientationAwareActivity() {
                 mainViewModel.updateOnboardingState(OnboardingState.BLUETOOTH_CHECK)
                 mainViewModel.updateBluetoothLoading(false)
             }
-            currentLocationStatus != LocationStatus.ENABLED -> {
+            permissionManager.isLocationRequiredForBle() && currentLocationStatus != LocationStatus.ENABLED -> {
                 // Location services still disabled, but now we have permissions to enable it
                 mainViewModel.updateLocationStatus(currentLocationStatus)
                 mainViewModel.updateOnboardingState(OnboardingState.LOCATION_CHECK)
@@ -776,7 +786,7 @@ class MainActivity : OrientationAwareActivity() {
             
             // Check if location services were disabled while app was backgrounded
             val currentLocationStatus = locationStatusManager.checkLocationStatus()
-            if (currentLocationStatus != LocationStatus.ENABLED) {
+            if (permissionManager.isLocationRequiredForBle() && currentLocationStatus != LocationStatus.ENABLED) {
                 Log.w("MainActivity", "Location services disabled while app was backgrounded")
                 mainViewModel.updateLocationStatus(currentLocationStatus)
                 mainViewModel.updateOnboardingState(OnboardingState.LOCATION_CHECK)
