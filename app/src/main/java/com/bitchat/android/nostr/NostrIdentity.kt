@@ -1,5 +1,6 @@
 package com.bitchat.android.nostr
 
+import com.bitchat.android.util.Redact
 import android.content.Context
 import android.util.Log
 import com.bitchat.android.favorites.FavoritesPersistenceService
@@ -29,7 +30,7 @@ data class NostrIdentity(
             val (privateKeyHex, publicKeyHex) = NostrCrypto.generateKeyPair()
             val npub = Bech32.encode("npub", publicKeyHex.hexToByteArrayLocal())
             
-            Log.d(TAG, "Generated new Nostr identity: npub=$npub")
+            Log.d(TAG, "Generated new Nostr identity: npub=${Redact.id(npub)}")
             
             return NostrIdentity(
                 privateKeyHex = privateKeyHex,

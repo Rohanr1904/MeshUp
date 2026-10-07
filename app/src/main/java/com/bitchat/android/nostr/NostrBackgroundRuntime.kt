@@ -246,7 +246,7 @@ object NostrBackgroundRuntime {
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            Log.w(TAG, "Presence heartbeat failed for $geohash: ${e.message}")
+                            Log.w(TAG, "Presence heartbeat failed for ${com.bitchat.android.util.Redact.id(geohash)}: ${e.message}")
                         }
                     }
                 }
