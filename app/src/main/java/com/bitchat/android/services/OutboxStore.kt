@@ -204,7 +204,7 @@ internal class OutboxStore(
                     is DecodeResult.Corrupt ->
                         corrupt += CorruptOutboxRow(messageId, conversationId)
                     is DecodeResult.Transient ->
-                        Log.w(TAG, "Outbox row id=${messageId.take(8)} unreadable for now " +
+                        Log.w(TAG, "Outbox row id=${com.bitchat.android.util.Redact.id(messageId)} unreadable for now " +
                             "(${decoded.error.javaClass.simpleName}); keeping it")
                     is DecodeResult.Ok -> entries += OutboxEntry(
                         messageId = messageId,
@@ -227,7 +227,7 @@ internal class OutboxStore(
             db.beginTransaction()
             try {
                 corrupt.forEach {
-                    Log.w(TAG, "Dropping undecryptable outbox row id=${it.messageId.take(8)}")
+                    Log.w(TAG, "Dropping undecryptable outbox row id=${com.bitchat.android.util.Redact.id(it.messageId)}")
                     db.delete(TABLE, "message_id = ?", arrayOf(it.messageId))
                 }
                 db.setTransactionSuccessful()
