@@ -39,7 +39,8 @@ import com.bitchat.android.onboarding.OnboardingCoordinator
 import com.bitchat.android.onboarding.OnboardingState
 import com.bitchat.android.onboarding.PermissionExplanationScreen
 import com.bitchat.android.onboarding.PermissionManager
-import com.bitchat.android.ui.ChatScreen
+import com.bitchat.android.meshup.MeshUpContainer
+import com.bitchat.android.meshup.shell.MeshUpApp
 import com.bitchat.android.ui.ChatViewModel
 import com.bitchat.android.ui.OrientationAwareActivity
 import com.bitchat.android.ui.theme.BitchatTheme
@@ -70,7 +71,11 @@ class MainActivity : OrientationAwareActivity() {
             }
         }
     }
-    
+    // Adapters over the single chatViewModel; lazy so it is first touched after mesh init.
+    private val meshUpContainer: MeshUpContainer by lazy {
+        MeshUpContainer.create(chatViewModel, lifecycleScope)
+    }
+
     private val forceFinishReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
             if (intent.action == com.bitchat.android.util.AppConstants.UI.ACTION_FORCE_FINISH) {
@@ -317,7 +322,8 @@ class MainActivity : OrientationAwareActivity() {
                 val backCallback = object : OnBackPressedCallback(true) {
                     override fun handleOnBackPressed() {
                         // Let ChatViewModel handle navigation state
-                        val handled = chatViewModel.handleBackPressed()
+                        // Non-Chats tabs go back to Chats first.
+                        val handled = meshUpContainer.shell.handleBack() || chatViewModel.handleBackPressed()
                         if (!handled) {
                             // If ChatViewModel doesn't handle it, disable this callback
                             // and let the system handle it (which will exit the app)
@@ -330,7 +336,7 @@ class MainActivity : OrientationAwareActivity() {
 
                 // Add the callback - this will be automatically removed when the activity is destroyed
                 onBackPressedDispatcher.addCallback(this, backCallback)
-                ChatScreen(viewModel = chatViewModel)
+                MeshUpApp(meshUpContainer, chatViewModel)
             }
             
             OnboardingState.ERROR -> {

@@ -3,6 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application>
+        <!-- Host activity for Compose UI tests (ui-test-manifest is only on the androidTest
+             classpath, which would otherwise put it in the test APK's process). -->
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="false"
+            tools:ignore="MissingClass" />
         <!-- Debug-only ADB test hook. Drives mesh operations (scan, connect,
              handshake, DMs, files, broadcast, raw packets) from host scripts.
              Exported intentionally so `adb shell am broadcast` can reach it;
