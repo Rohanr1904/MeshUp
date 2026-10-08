@@ -346,6 +346,15 @@ class LocationChannelManager private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * MeshUp: Internet turned OFF (Decision 013). Stops live updates and cancels any pending
+     * reverse-geocoding job. Call on the main thread, which owns the live-location callback.
+     */
+    fun stopLiveLocationForInternetOff() {
+        endLiveRefresh()
+        cancelLiveLocationWork()
+    }
+
     private fun cancelLiveLocationWork() {
         locationProvider.cancel()
         activeLocationUpdateCallback = null

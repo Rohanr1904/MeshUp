@@ -13,7 +13,7 @@ import okhttp3.Response
 import java.util.Locale
 import kotlin.coroutines.resume
 
-class OpenStreetMapGeocoderProvider : GeocoderProvider {
+internal class OpenStreetMapGeocoderProvider : GeocoderProvider {
     private val TAG = "OSMGeocoderProvider"
     private val gson = Gson()
     private val userAgent = "Bitchat-Android/1.0"

@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
@@ -54,5 +55,10 @@ class InternetGatedGeocoderProviderTest {
 
         assertEquals(1, delegate.calls)
         assertTrue(result.isEmpty())
+    }
+
+    @Test fun factoryAlwaysReturnsGatedProvider() {
+        val provider = GeocoderFactory.get(RuntimeEnvironment.getApplication())
+        assertTrue(provider is InternetGatedGeocoderProvider)
     }
 }

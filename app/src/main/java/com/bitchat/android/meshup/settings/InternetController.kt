@@ -115,7 +115,7 @@ class InternetController(
                         val location = com.bitchat.android.geohash.LocationChannelManager.getInstance(app)
                         // Live location updates are owned by the main thread (the location sheet).
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            try { location.endLiveRefresh() } catch (e: Exception) { Log.w(TAG, "liveRefresh failed: ${e.message}") }
+                            try { location.stopLiveLocationForInternetOff() } catch (e: Exception) { Log.w(TAG, "liveLocation failed: ${e.message}") }
                         }
                         location.select(com.bitchat.android.geohash.ChannelID.Mesh)
                     }
