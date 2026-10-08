@@ -59,6 +59,9 @@
     <string name="meshup_licenses_title">Open-source licences</string>
     <string name="meshup_licenses_back">Back</string>
     <string name="meshup_licenses_app_license">NearBird is free software licensed under the GNU General Public License v3.0.</string>
+    <string name="meshup_licenses_copyright">Copyright: NearBird contributors and the contributors to bitchat for Android. See NOTICE in the source repository.</string>
+    <string name="meshup_licenses_no_warranty">NearBird comes with ABSOLUTELY NO WARRANTY, to the extent permitted by law. It is free software, and you may redistribute it under the terms of the GNU General Public License v3.0.</string>
+    <string name="meshup_licenses_modified">NearBird is a modified version of bitchat for Android. It was forked on 2026-10-07; changes since then are recorded in the source history.</string>
     <string name="meshup_licenses_based_on">Based on bitchat for Android by permissionlesstech (GPLv3).</string>
     <string name="meshup_licenses_source_link">Source code: %1$s</string>
     <string name="meshup_licenses_source_desc">Open the NearBird source code in your browser</string>

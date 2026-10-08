@@ -60,6 +60,9 @@ fun LicensesScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         )
         Text(stringResource(R.string.meshup_licenses_app_license))
         Text(stringResource(R.string.meshup_licenses_based_on))
+        Text(stringResource(R.string.meshup_licenses_modified))
+        Text(stringResource(R.string.meshup_licenses_copyright))
+        Text(stringResource(R.string.meshup_licenses_no_warranty), modifier = Modifier.testTag("licenses_no_warranty"))
         val sourceDesc = stringResource(R.string.meshup_licenses_source_desc)
         TextButton(
             onClick = { context.openUrl(sourceUrl) },

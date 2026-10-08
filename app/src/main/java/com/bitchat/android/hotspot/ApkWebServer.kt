@@ -79,7 +79,7 @@ class ApkWebServer(
                 apkFile.length()
             )
 
-            response.addHeader("Content-Disposition", "attachment; filename=\"bitchat-${appVersion}.apk\"")
+            response.addHeader("Content-Disposition", "attachment; filename=\"nearbird-${appVersion}.apk\"")
             response.addHeader("Accept-Ranges", "bytes")
 
             response
@@ -116,7 +116,7 @@ class ApkWebServer(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Download BitChat</title>
+    <title>Download NearBird</title>
     <style>
         * {
             margin: 0;
@@ -257,7 +257,7 @@ class ApkWebServer(
 <body>
     <div class="container">
         <div class="logo">🔒</div>
-        <h1>BitChat</h1>
+        <h1>NearBird</h1>
         <p class="subtitle">Secure Mesh Messaging</p>
 
         <div class="info-grid">
@@ -272,7 +272,7 @@ class ApkWebServer(
         </div>
 
         <a href="/bitchat.apk" class="download-button">
-            📥 Download BitChat
+            📥 Download NearBird
         </a>
 
         <div class="instructions">
@@ -288,7 +288,7 @@ class ApkWebServer(
 
         <div class="warning">
             <strong>⚠️ Note:</strong>
-            If you already have BitChat installed, you may need to uninstall it first before installing this version. Make sure to backup your data if needed.
+            If you already have NearBird installed, you may need to uninstall it first before installing this version. Make sure to backup your data if needed.
         </div>
     </div>
 </body>
