@@ -1,6 +1,6 @@
 # Android maintainer release guide
 
-This is the operational runbook for publishing a Bitchat Android release to
+This is the operational runbook for publishing a NearBird release to
 GitHub and Google Play. Follow it from top to bottom for every release.
 
 The central rule is:
@@ -12,7 +12,7 @@ No keystore or password is stored in GitHub, GitHub Actions, the repository,
 release notes, or workflow artifacts.
 
 This runbook releases both the phone and Wear OS apps under the shared Play
-application ID `com.bitchat.droid`. Wear releases use the independent version
+application ID `io.github.rohanr1904.nearbird`. Wear releases use the independent version
 code range beginning at `1000000001`; every phone and Wear artifact uploaded to
 one Play listing must have a unique version code.
 
@@ -61,9 +61,9 @@ The maintainer needs:
 
 - permission to push a release tag and create GitHub Releases;
 - a GitHub CLI login authorized for
-  `permissionlesstech/bitchat-android`;
+  `Rohanr1904/MeshUp`;
 - Play Console permission to create and promote releases for
-  `com.bitchat.droid`; and
+  `io.github.rohanr1904.nearbird`; and
 - access to the project's release approval record.
 
 Check the GitHub login:
@@ -144,7 +144,7 @@ git log -1 --oneline
 Set shell variables for the rest of the release:
 
 ```bash
-export REPOSITORY=permissionlesstech/bitchat-android
+export REPOSITORY=Rohanr1904/MeshUp
 export TAG=vX.Y.Z
 export VERSION_CODE=NN
 export WEAR_VERSION_CODE=1000000001
@@ -167,7 +167,7 @@ Stop if either `test` command fails.
 Create a signed annotated tag on the approved commit:
 
 ```bash
-git tag -s "$TAG" -m "Bitchat Android $TAG"
+git tag -s "$TAG" -m "NearBird $TAG"
 git tag -v "$TAG"
 git push origin "$TAG"
 ```
@@ -247,14 +247,14 @@ The directory must initially contain exactly these canonical files:
 
 - `BUILDINFO.json`
 - `SHA256SUMS.unsigned`
-- `bitchat-android-arm64-unsigned.apk`
-- `bitchat-android-armv7-unsigned.apk`
-- `bitchat-android-universal-unsigned.apk`
-- `bitchat-android-x86-unsigned.apk`
-- `bitchat-android-x86_64-unsigned.apk`
-- `bitchat-android-release-unsigned.aab`
-- `bitchat-android-wear-unsigned.apk`
-- `bitchat-android-wear-release-unsigned.aab`
+- `nearbird-arm64-unsigned.apk`
+- `nearbird-armv7-unsigned.apk`
+- `nearbird-universal-unsigned.apk`
+- `nearbird-x86-unsigned.apk`
+- `nearbird-x86_64-unsigned.apk`
+- `nearbird-release-unsigned.aab`
+- `nearbird-wear-unsigned.apk`
+- `nearbird-wear-release-unsigned.aab`
 
 Verify the checksum manifest:
 
@@ -330,10 +330,10 @@ The helper:
 
 It creates:
 
-- `bitchat-android-arm64.apk`
-- `bitchat-android-universal.apk`
-- `bitchat-android-wear.apk`
-- `bitchat-android-x86_64.apk`
+- `nearbird-arm64.apk`
+- `nearbird-universal.apk`
+- `nearbird-wear.apk`
+- `nearbird-x86_64.apk`
 
 The unsigned armv7 and x86 APKs remain available for reproducibility, but are
 not published as signed install targets under the current release policy.
@@ -366,16 +366,16 @@ Run:
 tools/reproducible-builds/sign-play-bundle.sh "$RELEASE_DIR"
 ```
 
-The helper creates `bitchat-android-play-upload.aab` and
-`bitchat-android-wear-play-upload.aab`, verifies their JAR signatures, proves
+The helper creates `nearbird-play-upload.aab` and
+`nearbird-wear-play-upload.aab`, verifies their JAR signatures, proves
 that every non-signature payload entry matches the corresponding canonical
 unsigned AAB, and updates `SHA256SUMS`.
 
 These are the only files to upload to Play Console:
 
 ```text
-release-X.Y.Z/bitchat-android-play-upload.aab
-release-X.Y.Z/bitchat-android-wear-play-upload.aab
+release-X.Y.Z/nearbird-play-upload.aab
+release-X.Y.Z/nearbird-wear-play-upload.aab
 ```
 
 Do not upload an APK or either `*-release-unsigned.aab` to Play. Do not open
@@ -405,19 +405,19 @@ The final GitHub Release must contain all 17 files below:
 
 | Asset | Signed? | Why it is published |
 |---|---:|---|
-| `bitchat-android-arm64.apk` | APK release key | Primary direct-install APK |
-| `bitchat-android-universal.apk` | APK release key | Fallback direct-install APK |
-| `bitchat-android-x86_64.apk` | APK release key | x86_64 install APK |
-| `bitchat-android-wear.apk` | APK release key | Wear OS direct-install APK |
-| Five phone `bitchat-android-*-unsigned.apk` files | No | Reproducibility inputs for every phone ABI target |
-| `bitchat-android-release-unsigned.aab` | No | Canonical reproducible Play input |
-| `bitchat-android-play-upload.aab` | Play upload key | Exact bundle uploaded to Play |
-| `bitchat-android-wear-unsigned.apk` | No | Canonical reproducible Wear install input |
-| `bitchat-android-wear-release-unsigned.aab` | No | Canonical reproducible Wear Play input |
-| `bitchat-android-wear-play-upload.aab` | Play upload key | Exact bundle uploaded to the Wear OS track |
-| `BITCHAT_BUILDINFO.json` | GitHub attestation | Source commit and pinned toolchain |
-| `BITCHAT_SHA256SUMS.unsigned` | GitHub attestation | Original canonical CI manifest |
-| `BITCHAT_SHA256SUMS` | No detached signature | SHA-256 for every published asset |
+| `nearbird-arm64.apk` | APK release key | Primary direct-install APK |
+| `nearbird-universal.apk` | APK release key | Fallback direct-install APK |
+| `nearbird-x86_64.apk` | APK release key | x86_64 install APK |
+| `nearbird-wear.apk` | APK release key | Wear OS direct-install APK |
+| Five phone `nearbird-*-unsigned.apk` files | No | Reproducibility inputs for every phone ABI target |
+| `nearbird-release-unsigned.aab` | No | Canonical reproducible Play input |
+| `nearbird-play-upload.aab` | Play upload key | Exact bundle uploaded to Play |
+| `nearbird-wear-unsigned.apk` | No | Canonical reproducible Wear install input |
+| `nearbird-wear-release-unsigned.aab` | No | Canonical reproducible Wear Play input |
+| `nearbird-wear-play-upload.aab` | Play upload key | Exact bundle uploaded to the Wear OS track |
+| `NEARBIRD_BUILDINFO.json` | GitHub attestation | Source commit and pinned toolchain |
+| `NEARBIRD_SHA256SUMS.unsigned` | GitHub attestation | Original canonical CI manifest |
+| `NEARBIRD_SHA256SUMS` | No detached signature | SHA-256 for every published asset |
 
 Run the public checksum verification once more:
 
@@ -425,9 +425,9 @@ Run the public checksum verification once more:
 (
   cd "$RELEASE_DIR"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -c BITCHAT_SHA256SUMS
+    sha256sum -c NEARBIRD_SHA256SUMS
   else
-    shasum -a 256 -c BITCHAT_SHA256SUMS
+    shasum -a 256 -c NEARBIRD_SHA256SUMS
   fi
 )
 ```
@@ -440,11 +440,12 @@ local paths, or device/user identifiers to this directory.
 Create a local release-notes file. At minimum it must contain:
 
 ```markdown
-## Bitchat Android vX.Y.Z
+## NearBird vX.Y.Z
 
 - Version code: NN
-- Wear version: 0.1.0 (code 1000000001)
+- Wear version: X.Y.Z (code 1000000001)
 - Source tag: vX.Y.Z
+- Source: nearbird-vX.Y.Z-source.tar.gz (attached), or tag vX.Y.Z at https://github.com/Rohanr1904/MeshUp
 - GitHub APK signing certificate SHA-256: FINGERPRINT
 - Play upload certificate SHA-256: FINGERPRINT
 - Play app-signing certificate SHA-256: FINGERPRINT
@@ -470,13 +471,22 @@ gh release create "$TAG" "$RELEASE_DIR"/* \
   --repo "$REPOSITORY" \
   --verify-tag \
   --draft \
-  --title "Bitchat Android $TAG" \
+  --title "NearBird $TAG" \
   --notes-file "release-notes-$TAG.md"
 ```
 
 `--verify-tag` prevents `gh` from silently creating a tag at the wrong commit.
-GitHub automatically exposes source archives for the tag; do not upload separate
-source ZIP or tar files.
+GitHub also exposes automatic source archives for the tag. In addition, attach the
+attested `nearbird-$TAG-source.tar.gz` and its `.sha256` from the `release-source`
+artifact of the same Release workflow run (GPLv3 section 6(d)). They are not part
+of `$RELEASE_DIR` and are not listed in `NEARBIRD_SHA256SUMS`:
+
+```bash
+export SOURCE_DIR="source-${TAG#v}"
+gh run download "$RUN_ID" --repo "$REPOSITORY" -n release-source -D "$SOURCE_DIR"
+gh attestation verify "$SOURCE_DIR/nearbird-$TAG-source.tar.gz" --repo "$REPOSITORY"
+gh release upload "$TAG" "$SOURCE_DIR"/* --repo "$REPOSITORY"
+```
 
 Inspect the draft:
 
@@ -488,11 +498,11 @@ Keep it as a draft until the Play internal-track checks below pass.
 
 ## 9. Upload and test the AABs in Google Play
 
-1. Open Play Console and select `com.bitchat.droid`.
+1. Open Play Console and select `io.github.rohanr1904.nearbird`.
 2. Open **Test and release > Testing > Internal testing**.
 3. Create a new release.
 4. Upload exactly:
-   `release-X.Y.Z/bitchat-android-play-upload.aab`.
+   `release-X.Y.Z/nearbird-play-upload.aab`.
 5. Confirm Play accepts the upload signature and reports the expected package,
    `versionCode`, and `versionName`.
 6. Add the user-visible Play release notes.
@@ -503,14 +513,14 @@ Keep it as a draft until the Play internal-track checks below pass.
    networking, and the release-critical scenarios.
 9. In **App bundle explorer**, select the uploaded version. If the account
    permits downloading the original AAB, download it and verify that its digest
-   matches `bitchat-android-play-upload.aab` in `BITCHAT_SHA256SUMS`.
+   matches `nearbird-play-upload.aab` in `NEARBIRD_SHA256SUMS`.
 10. In **Setup > App integrity**, confirm the Play app-signing certificate
     SHA-256 is the value recorded in the GitHub release notes.
 
 For the initial Wear release, open **Test and release > Advanced settings >
 Form factors**, add Wear OS, upload the required Wear screenshot, and use the
 dedicated **Wear OS only** test track. Upload exactly
-`bitchat-android-wear-play-upload.aab`, confirm version code `1000000001`, and
+`nearbird-wear-play-upload.aab`, confirm version code `1000000001`, and
 complete the Wear OS opt-in and review flow. Promote the already-tested Wear
 artifact on its dedicated track; do not add it to the mobile track.
 
@@ -592,7 +602,7 @@ Also verify:
 - [ ] Checksums, source commit, and attestations verified
 - [ ] GitHub APKs signed locally with the pinned certificate
 - [ ] Phone and Wear Play AABs signed locally with the registered upload key
-- [ ] `BITCHAT_SHA256SUMS` verifies all 17 release assets
+- [ ] `NEARBIRD_SHA256SUMS` verifies all 17 release assets
 - [ ] GitHub draft created with certificate fingerprints and all assets
 - [ ] Exact signed phone and Wear AABs uploaded to and tested on their tracks
 - [ ] GitHub Release published

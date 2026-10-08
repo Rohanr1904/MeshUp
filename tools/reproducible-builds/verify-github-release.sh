@@ -37,15 +37,15 @@ mkdir -p "$DOWNLOAD_DIR"
 gh release download "$TAG" \
   --repo "$REPOSITORY" \
   --dir "$DOWNLOAD_DIR" \
-  --pattern 'BITCHAT_BUILDINFO.json' \
-  --pattern 'BITCHAT_SHA256SUMS' \
-  --pattern 'BITCHAT_SHA256SUMS.unsigned' \
+  --pattern 'NEARBIRD_BUILDINFO.json' \
+  --pattern 'NEARBIRD_SHA256SUMS' \
+  --pattern 'NEARBIRD_SHA256SUMS.unsigned' \
   --pattern 'nearbird-*.apk' \
   --pattern 'nearbird-*.aab'
 
 attested_artifacts=(
-  BITCHAT_BUILDINFO.json
-  BITCHAT_SHA256SUMS.unsigned
+  NEARBIRD_BUILDINFO.json
+  NEARBIRD_SHA256SUMS.unsigned
   nearbird-arm64-unsigned.apk
   nearbird-armv7-unsigned.apk
   nearbird-release-unsigned.aab
@@ -66,13 +66,13 @@ echo "GitHub provenance attestations for the canonical unsigned build verified."
 
 (
   cd "$DOWNLOAD_DIR"
-  "${SHA256[@]}" -c BITCHAT_SHA256SUMS
+  "${SHA256[@]}" -c NEARBIRD_SHA256SUMS
 )
 echo "GitHub release checksums verified."
 
-mv "$DOWNLOAD_DIR/BITCHAT_BUILDINFO.json" "$DOWNLOAD_DIR/BUILDINFO.json"
-mv "$DOWNLOAD_DIR/BITCHAT_SHA256SUMS" "$DOWNLOAD_DIR/SHA256SUMS"
-mv "$DOWNLOAD_DIR/BITCHAT_SHA256SUMS.unsigned" "$DOWNLOAD_DIR/SHA256SUMS.unsigned"
+mv "$DOWNLOAD_DIR/NEARBIRD_BUILDINFO.json" "$DOWNLOAD_DIR/BUILDINFO.json"
+mv "$DOWNLOAD_DIR/NEARBIRD_SHA256SUMS" "$DOWNLOAD_DIR/SHA256SUMS"
+mv "$DOWNLOAD_DIR/NEARBIRD_SHA256SUMS.unsigned" "$DOWNLOAD_DIR/SHA256SUMS.unsigned"
 
 if [ "$MODE" = "--no-rebuild" ]; then
   exit 0

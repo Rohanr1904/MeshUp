@@ -1,6 +1,6 @@
 # Reproducible builds
 
-Bitchat's canonical release build produces byte-for-byte reproducible unsigned
+NearBird's canonical release build produces byte-for-byte reproducible unsigned
 phone and Wear OS APKs and Android App Bundles (AABs). CI builds the release
 twice in independent jobs and exposes a verified release artifact only when
 every canonical byte matches.
@@ -65,8 +65,8 @@ Android and Gradle images and dependencies. R8's single-threaded deterministic
 mode can exceed an 8 GiB Docker memory limit while optimizing the phone app.
 
 ```bash
-git clone https://github.com/permissionlesstech/bitchat-android.git
-cd bitchat-android
+git clone https://github.com/Rohanr1904/MeshUp.git
+cd MeshUp
 git checkout vX.Y.Z
 tools/reproducible-builds/build-in-container.sh \
   .reproducible-build/local-vX.Y.Z
@@ -75,9 +75,9 @@ tools/reproducible-builds/build-in-container.sh \
 The output contains:
 
 - unsigned APKs for arm64, armv7, x86, x86_64, and universal installs
-- `bitchat-android-release-unsigned.aab`
-- `bitchat-android-wear-unsigned.apk`
-- `bitchat-android-wear-release-unsigned.aab`
+- `nearbird-release-unsigned.aab`
+- `nearbird-wear-unsigned.apk`
+- `nearbird-wear-release-unsigned.aab`
 - `BUILDINFO.json`
 - `SHA256SUMS.unsigned`
 
@@ -114,7 +114,7 @@ That command:
 1. downloads all release APKs, AABs, build information, and checksum files;
 2. verifies the canonical unsigned build's GitHub artifact-attestation subjects
    against this repository;
-3. verifies `BITCHAT_SHA256SUMS`;
+3. verifies `NEARBIRD_SHA256SUMS`;
 4. checks that the local source commit is the release commit;
 5. rebuilds in the pinned container; and
 6. byte-compares every unsigned APK, both unsigned AABs, build information, and
@@ -130,7 +130,7 @@ For a manual signature check, use the exact `apksigner` from Android Build Tools
 37.0.0:
 
 ```bash
-apksigner verify --verbose --print-certs bitchat-android-universal.apk
+apksigner verify --verbose --print-certs nearbird-universal.apk
 ```
 
 Compare the reported signer certificate SHA-256 with
@@ -144,17 +144,17 @@ uncompressed payload bytes as the reproduced unsigned APK:
 
 ```bash
 tools/reproducible-builds/compare-archive-payloads.sh \
-  .reproducible-build/local-vX.Y.Z/bitchat-android-universal-unsigned.apk \
-  bitchat-android-universal.apk
+  .reproducible-build/local-vX.Y.Z/nearbird-universal-unsigned.apk \
+  nearbird-universal.apk
 ```
 
 GitHub's manual equivalents are:
 
 ```bash
 gh release download vX.Y.Z
-sha256sum -c BITCHAT_SHA256SUMS
-gh attestation verify bitchat-android-universal-unsigned.apk \
-  --repo permissionlesstech/bitchat-android
+sha256sum -c NEARBIRD_SHA256SUMS
+gh attestation verify nearbird-universal-unsigned.apk \
+  --repo Rohanr1904/MeshUp
 ```
 
 ## Verify a Google Play release
@@ -175,7 +175,7 @@ GitHub universal APK or to a locally built APK. Use this procedure instead:
 
    ```bash
    tools/reproducible-builds/compare-archive-payloads.sh \
-     .reproducible-build/local-vX.Y.Z/bitchat-android-release-unsigned.aab \
+     .reproducible-build/local-vX.Y.Z/nearbird-release-unsigned.aab \
      downloaded-from-play.aab
    ```
 
@@ -199,7 +199,7 @@ GitHub universal APK or to a locally built APK. Use this procedure instead:
 
    ```bash
    bundletool build-apks \
-     --bundle=bitchat-android-release-unsigned.aab \
+     --bundle=nearbird-release-unsigned.aab \
      --output=local.apks \
      --device-spec=device.json
    ```
@@ -212,8 +212,8 @@ record the Play version code and app-signing certificate fingerprint alongside
 the release.
 
 The GitHub workflow builds and attests both canonical unsigned AABs. A
-maintainer locally creates `bitchat-android-play-upload.aab` and
-`bitchat-android-wear-play-upload.aab` from those exact files and uploads them
+maintainer locally creates `nearbird-play-upload.aab` and
+`nearbird-wear-play-upload.aab` from those exact files and uploads them
 manually to Google Play.
 
 ## Maintainer release process

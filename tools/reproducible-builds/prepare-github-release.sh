@@ -69,7 +69,7 @@ for artifact_path in "$RELEASE_DIR"/*; do
   esac
 done
 
-for destination in BITCHAT_BUILDINFO.json BITCHAT_SHA256SUMS BITCHAT_SHA256SUMS.unsigned; do
+for destination in NEARBIRD_BUILDINFO.json NEARBIRD_SHA256SUMS NEARBIRD_SHA256SUMS.unsigned; do
   if [ -e "$RELEASE_DIR/$destination" ]; then
     echo "error: public release manifest already exists: $destination" >&2
     exit 1
@@ -81,17 +81,17 @@ done
   "${SHA256[@]}" -c SHA256SUMS
 )
 
-mv "$RELEASE_DIR/BUILDINFO.json" "$RELEASE_DIR/BITCHAT_BUILDINFO.json"
-mv "$RELEASE_DIR/SHA256SUMS.unsigned" "$RELEASE_DIR/BITCHAT_SHA256SUMS.unsigned"
+mv "$RELEASE_DIR/BUILDINFO.json" "$RELEASE_DIR/NEARBIRD_BUILDINFO.json"
+mv "$RELEASE_DIR/SHA256SUMS.unsigned" "$RELEASE_DIR/NEARBIRD_SHA256SUMS.unsigned"
 sed \
-  -e 's/  BUILDINFO.json$/  BITCHAT_BUILDINFO.json/' \
-  -e 's/  SHA256SUMS.unsigned$/  BITCHAT_SHA256SUMS.unsigned/' \
-  "$RELEASE_DIR/SHA256SUMS" > "$RELEASE_DIR/BITCHAT_SHA256SUMS"
+  -e 's/  BUILDINFO.json$/  NEARBIRD_BUILDINFO.json/' \
+  -e 's/  SHA256SUMS.unsigned$/  NEARBIRD_SHA256SUMS.unsigned/' \
+  "$RELEASE_DIR/SHA256SUMS" > "$RELEASE_DIR/NEARBIRD_SHA256SUMS"
 rm "$RELEASE_DIR/SHA256SUMS"
 
 (
   cd "$RELEASE_DIR"
-  "${SHA256[@]}" -c BITCHAT_SHA256SUMS
+  "${SHA256[@]}" -c NEARBIRD_SHA256SUMS
 )
 
 echo "Release assets are checksummed and ready for manual GitHub publication."
