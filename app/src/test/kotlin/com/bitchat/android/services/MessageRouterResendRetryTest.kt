@@ -13,6 +13,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -138,6 +139,39 @@ class MessageRouterResendRetryTest {
     }
 
     @Test
+    fun `expiry tick with the peer ready fails once and does not resend`() {
+        peerReady()
+        val router = newRouter()
+        router.sendPrivate("hi", peerID, "peer", "m1")
+        tick(router, fakeTime + AppConstants.Router.OUTBOX_EXPIRY_MS + 1)
+        verifySends("m1", 1)
+        assertTrue(store.rows.isEmpty())
+        assertEquals(MessageRouter.REASON_NO_CONFIRMATION, failedReason("m1"))
+        assertEquals(1, statuses.count { it.first == "m1" && it.second is DeliveryStatus.Failed })
+    }
+
+    @Test
+    fun `one hour Failed offers retry with the same id and a late ack upgrades it`() {
+        peerReady()
+        val router = newRouter()
+        AppStateStore.addPrivateMessage(peerID, ownMessage("m1", DeliveryStatus.Sending))
+        router.sendPrivate("hi", peerID, "peer", "m1")
+        peerOffline()
+        tick(router, fakeTime + AppConstants.Router.OUTBOX_EXPIRY_MS + 1)
+        assertEquals(
+            MessageRouter.REASON_NO_CONFIRMATION,
+            (storedStatus("m1") as? DeliveryStatus.Failed)?.reason
+        )
+
+        peerReady()
+        assertNotNull(router.retry("m1"))
+        verifySends("m1", 2)
+
+        AppStateStore.updatePrivateMessageStatus("m1", DeliveryStatus.Delivered(peerID, Date()))
+        assertTrue(storedStatus("m1") is DeliveryStatus.Delivered)
+    }
+
+    @Test
     fun `late ack upgrades failed`() {
         peerReady()
         val router = newRouter()
@@ -166,11 +200,11 @@ class MessageRouterResendRetryTest {
         verifySends("m1", 2)
         assertEquals(2, store.rows["m1"]!!.attempts)
 
-        // Still bounded by 1 h: dropped silently, status kept (amendment).
+        // Still bounded by 1 h: removed and Failed, so Retry is offered (amendment 3).
         peerOffline()
         tick(router, t0 + AppConstants.Router.OUTBOX_EXPIRY_MS + 1)
         assertTrue(store.rows.isEmpty())
-        assertNull(failedReason("m1"))
+        assertEquals(MessageRouter.REASON_NO_CONFIRMATION, failedReason("m1"))
     }
 
     @Test
