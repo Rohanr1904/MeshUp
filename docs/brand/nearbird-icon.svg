@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+  <title>NearBird icon</title>
+  <rect width="108" height="108" fill="#10283C"/>
+  <path fill="#FFC857" d="M37,65.5A15,10 0 1 0 67,65.5A15,10 0 1 0 37,65.5ZM55,53.5A8,8 0 1 0 71,53.5A8,8 0 1 0 55,53.5ZM70,49.5L80,54.5L70,58.5ZM40,61.5L24,55.5L28,66.5L24,74.5L41,70.5Z"/>
+  <path fill="none" stroke="#FFC857" stroke-width="2.5" stroke-linecap="round" d="M50,74.5L48,81.5M56,75.5L56,81.5"/>
+  <path fill="none" stroke="#FFC857" stroke-width="3" stroke-linecap="round" d="M64.74,33.58A20,20 0 0 1 79.38,42.03M65.35,26.6A27,27 0 0 1 85.12,38.01"/>
+  <path fill="#10283C" d="M63.2,51.5A1.8,1.8 0 1 0 66.8,51.5A1.8,1.8 0 1 0 63.2,51.5Z"/>
+  <path fill="none" stroke="#10283C" stroke-width="2.5" stroke-linecap="round" d="M44,65.5Q52,73.5 62,64.5"/>
+</svg>

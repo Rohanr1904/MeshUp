@@ -1,1 +1,1 @@
-IRC style chat over Bluetooth mesh
+Offline Bluetooth mesh messenger. Encrypted chats, no account or phone number.
