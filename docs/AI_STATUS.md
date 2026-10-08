@@ -56,8 +56,13 @@ All three characterization `knownDefect_*` families are now inverted and green: 
    - Licence verification: 194 JVM artifacts + 465 Rust crates checked, **no GPL-incompatible licence found** (`docs/legal/THIRD_PARTY_LICENCES.md`). Open: JSR-305 notice, `ring` (Apache-2.0 AND ISC), MPL-2.0 `option-ext`, proprietary ML Kit / Play Services (NEEDS LAWYER; blocks F-Droid). Licences-screen corrections: `docs/legal/LICENSES_SCREEN_DIFF.md`.
    - GPLv3 release checklist (`docs/legal/GPL_RELEASE_CHECKLIST.md`): missing §5(a) NOTICE and `TRADEMARKS.md` (proposals ready); in-app copyright/no-warranty line missing; per-release source archive proposed; **leftover bitchat branding**: launcher icon, Wear app name, hotspot page title, permission rationale text, README, `BITCHAT_*` release asset names.
    - Privacy policy: 6 statements fail against the code (permissions list, media storage, retention limits, hotspot/Wi-Fi Aware, log-redaction wording, location/Play Services). Fixed draft: `docs/legal/proposals/PRIVACY_POLICY.filled.md` (GitHub Pages URL, repo URL, 18+, grievance line; **contact email stays a placeholder until a dedicated mailbox exists**).
-   - Remaining: **lawyer/CA review** using `docs/legal/LAWYER_BRIEF.md` (11 questions: GPL §5(a)/§6, ML Kit, public-domain code, trademark, DPDP, FCRA, income tax, GST, FEMA).
-4. **Name/domain:** web search finds no "NearBird" messenger; `nearbird.com`/`.org` are registered (since 2007); `nearbird.app` appears available (no purchase until device testing passes, Decision 017). **Owner:** trademark searches (IP India classes 9/38/42, WIPO, USPTO), via the Claude Cowork request; create a dedicated contact mailbox.
+   - **Donations:** `docs/legal/proposals/FUNDING.yml.draft` (GitHub Sponsors) drafted but **NOT enabled** until the CA/lawyer review; nothing in `.github/` or the README.
+   - Remaining: **lawyer/CA review** using `docs/legal/LAWYER_BRIEF.md` (one page, 6 questions: GPL §5(a)/§6(d)/signing key, FCRA, gift vs business income + GST, DPDP Data Fiduciary + 18+, ML Kit/Play Services with GPLv3, Indian trademark filing incl. GEARBIRD).
+4. **Name/domain** (brand checks 2026-10-08: `docs/legal/NearBird_cowork_report_2026-10-08.md`):
+   - **Trademark check: PARTIAL.** USPTO and WIPO: no NEARBIRD mark in classes 9/38/42. "NearBirds" (EU, classes 25/28) is low risk; "GEARBIRD" (India 5948768, class 9) is a possible similarity for the lawyer. **India (IP India ESEARCH) pending: owner action** (portal 503 + OTP login).
+   - **Domain: deferred** (Decision 017). `nearbird.app` is available (~US$15/yr); `.com` is parked for sale (~US$2,999), do not buy.
+   - **Handles:** "nearbird" is taken; use `nearbirdapp`. The repo stays under `Rohanr1904` (the applicationId depends on it).
+   - **Contact mailbox: owner to create** (plan: Proton Mail Free now, custom domain later). `[CONTACT EMAIL]` stays a placeholder everywhere until the owner confirms the address.
 5. **Publish v1.0.0 to GitHub Releases:** after gates 1, 3 and 4, with explicit owner approval.
 
 ## Deferred until after launch (Decision 016)
