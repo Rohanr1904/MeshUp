@@ -1,51 +1,92 @@
 # AI Status
 
 ## Current Phase
-Phase 1 (App shell, identity UX, Internet opt-in): PR-1..PR-4 **merged to main** (GitHub #1-#4, CI green each). PR-5 (Rooms tab) on `phase1/pr5-rooms`, PR #5. After PR-5 merges, Phase 1 exit criteria are met except physical-device mesh checks (Decision 009).
+**Phase 2: Reliability + engine hardening.** The core work is merged to `main`; P2-PR9 is in review. Launch preparation for **NearBird** has started (Decision 016).
 
-## Completed
-- Phase 0 analysis docs (PROJECT_ANALYSIS, MESH_ARCHITECTURE, SECURITY_REVIEW, TECHNICAL_DEBT, TARGET_ARCHITECTURE rev 2)
-- Decisions 011–014 recorded in `docs/product/08_DECISIONS.md`: GPLv3, wire-compatible with BitChat, Internet opt-in default OFF, Wear out of scope but compiling
-- Local baseline: `:app:assembleDebug` PASS, `lintDebug` PASS, `:wear:assembleDebug` PASS; unit tests 612 / 23–24 failed / 3 skipped
-- OneDrive ruled out as the cause of the test failures (same result in a plain local clone)
-- Characterization tests added, 12 tests, all passing (test-only, no production change):
-  - `app/src/test/kotlin/com/bitchat/android/noise/NoiseSessionReplayWindowCharacterizationTest.kt` (R1 replay; 4 controls + 2 known-defect)
-  - `app/src/test/kotlin/com/bitchat/android/mesh/PacketRelayTtlCharacterizationTest.kt` (R-5.3 TTL; 2 controls + 2 known-defect)
-  - `app/src/test/kotlin/com/bitchat/android/services/MessageRouterRestartCharacterizationTest.kt` (TD-01; 1 control + 1 known-defect)
+- **App:** **NearBird**, `io.github.rohanr1904.nearbird`, distributed via GitHub Releases plus a website (no Play Store).
+- **Working copy:** `C:\dev\MeshUp`. A second worktree, `C:\dev\MeshUp-ops`, is used for merges and parallel branches. The OneDrive copy is stale.
+- **Merge flow:** a reviewed PR is synced with `main`, must pass all 5 CI checks (test and lint, debug APK, two reproducible release builds, byte comparison), and is then merged with a merge commit.
+
+## Completed (merged to main)
+| PR | Item |
+|---|---|
+| #1–#5 | Phase 1: foundations, Internet opt-in gate (Decision 013), app shell, name step / Profile / Settings, Rooms tab |
+| #6 | Phase 2 plan + Decision 015 |
+| #7 | P2-PR1 Noise replay-window fix (R-5.1) |
+| #8 | P2-PR2 TTL clamp (R-5.3) |
+| #9 | P2-PR3 release log stripping + HMAC redaction (R-5.5) |
+| #10 | P2-PR4 bounded striped packet processing + per-link/global rate limits (R-5.2) |
+| #11 | P2-PR5 signing fails closed; stubs deleted (R-5.4a) |
+| #12 | P2-PR6 identity-reset safety, typed `reset` (R-5.4b) |
+| #13 | P2-PR7 DB v5 encrypted outbox (R-1) |
+| #14 | Launch scope (Decision 016), GPLv3 README statement, privacy policy draft |
+| #15 | P2-PR10 platform compliance; no background location on API 31+ (R-9) |
+| #16 | NearBird identity (R-10); APK trust = pinned cert or own signer |
+| #17 | P2-PR8 durable router, rehydrate, process-level owner (R-1); TD-01 flipped |
+
+All three characterization `knownDefect_*` families are now inverted and green: R1 replay, R-5.3 TTL and TD-01 outbox loss.
 
 ## In Progress
-- None. Open items carried forward:
-  - **Tor OFF residual (found 2026-10-07, emulator runtime toggle):** after switching Internet OFF, Arti reports stopped but 3 TCP connections to Tor nodes (ports 9001/443) stay ESTABLISHED (>75 s), plus one stale loopback SOCKS socket. Cause CONFIRMED: native `ArtiNative.stop()` (`tools/arti-build/src/lib.rs:434`) only aborts the SOCKS task and intentionally keeps `ARTI_CLIENT` (and its guard channels) alive. New traffic is blocked (gate + no SOCKS listener); no app data flows. Pre-existing upstream behaviour for the legacy Tor toggle. Fix options: process restart on OFF, or native change to drop the TorClient (rebuild libarti_android.so). Owner decision (2026-10-07): **restart prompt now** — Settings shows a restart hint + button when Internet is OFF but was ON earlier in the process (emulator-verified: after restart, zero app sockets). Native fix (drop TorClient in `ArtiNative.stop`) is a follow-up PR with security review.
-  - Legacy chat-header nickname edit bypasses `DisplayNameValidator` (follow-up).
-  - From the P2-PR1 security review (pre-existing, low): `NoiseSession` uses two locks (`cipherLock` for decrypt vs `this` for reset/completeHandshake/destroy), and the session fields are not volatile, so a decrypt racing a reset could write a stale `highestReceivedNonce` (DoS only, not replay). The receive side never counts messages, so `needsRekey()` ignores received nonces (`NoiseSession.kt` ~L596).
-  - From the P2-PR2 mesh review (pre-existing, security-review H12): `SecurityManager.kt:84-85` and `WifiAwareMeshService.kt:1303` use `ttl >= 7` to grant the fresh-ANNOUNCE dedup exception, so a forged TTL 255 announce still bypasses dedup. The relay clamp (R-5.3) does not cover this ingress check.
-  - Legacy header shows channel titles as `##name` (`ui/ChatHeader.kt:703` prefixes `#` to names already stored as `#name`); pre-existing, cosmetic.
-  - PR-3 follow-ups: new `meshup_*` strings untranslated (lint MissingTranslation, non-blocking); IME-open layout on Chats not verified (emulator has a hardware keyboard); leaving the Chats tab disposes the legacy ChatScreen composition (state lives in ChatViewModel; input draft/scroll may reset).
-  - PR-4: Settings switch must toggle via `InternetGate.setEnabled(...)` (single process-wide `NetworkSettings`); hide About-sheet update/Tor controls while OFF (review L3).
-  - M3 ML Kit telemetry: accepted as a known exception (Decision 013 addendum); follow-up: offline QR decoder.
-  - Residuals from PR-2 review: read receipts / favourite notifications are dropped (not queued) while OFF (L2); `ChatViewModel` ignores DROPPED for geohash DMs; brief Tor-start window if the gate flips OFF during an ON reconcile (relays stay blocked).
+- **P2-PR9** (branch `phase2/pr9-resend-retry`): ACK-timeout resend (D3), Failed + Retry (D5), and the session-race fix. Security and mesh reviews are running.
+  - Timing: with no ACK, the message becomes `Failed("No delivery confirmation")` at **about 7.5 min**. That is four resends at +30 s / +1 m / +2 m / +2 m, then one final 2 m wait for an ACK. A late ACK still upgrades the status to Delivered.
 
-## Blockers
-- **TD-29 (not blocking):** 5 Robolectric SQLite test classes fail on Windows only. CONFIRMED Windows-only: GitHub Actions run 37591481044 on the same commit `8d7de5e` (ubuntu-24.04) passed `testDebugUnitTest`, `lintDebug`, `assembleDebug` and the reproducible release builds. Locally, compare failing-test sets against this baseline.
-- **Dev environment:** builds inside the OneDrive folder hit `AccessDeniedException` locks on `app/build/intermediates`. Develop from a non-synced path (e.g. `C:\Users\sande\meshup-baseline`, or move the working copy).
-- README/PRIVACY_POLICY "public domain" statements still need correcting (Decision 011 follow-up; licence-text change needs its own reviewed PR).
+## Launch gates (Decision 016)
+1. **Physical devices (2–3 phones):**
+   - exactly-once delivery after a process kill
+   - multi-hop relay
+   - BLE discovery with `neverForLocation` on API 31–37
+   - background scanning on API 29–30
+   - boot/FGS start on API 34–37
+2. **Owner signing key:** create the keystore, set `BITCHAT_GITHUB_RELEASE_CERT_SHA256` in `gradle.properties`, then sign with `tools/reproducible-builds/sign-release.sh`. The script reads `BITCHAT_GITHUB_KEYSTORE`, `..._KEY_ALIAS`, `..._KEYSTORE_PASSWORD` and `..._KEY_PASSWORD` from the environment.
+3. **GPLv3:** the owner confirms it fits the business model (legal advice if unsure) and publishes the source. Finalise the `PRIVACY_POLICY.md` placeholders (contact, URLs, minimum age) and publish it on the website.
+4. **Trademark/domain check** for "NearBird".
 
-## Verification Status
-- Static analysis: done, key claims re-verified
-- Build: app debug PASS, wear debug PASS, lint PASS (Windows, JBR 25)
-- Unit tests: full suite 612 run, 23–24 failed (TD-29), 3 skipped; new characterization tests 12/12 pass
-- PR-1 (2026-10-07, Windows): meshup tests 18/18 pass; full suite 642 run / 23 failed / 3 skipped; failing classes = TD-29 set only (ConversationDatabaseTest, ConversationRepositoryTest, IncomingMessageAdmissionTest, MediaSendingManagerMigrationTest, NostrDirectMessageHandlerTest). `:wear:assembleDebug` PASS; `lintDebug` completes (abortOnError=false), only 2 `UseKtx` warnings in new code, matching legacy style.
-- Emulator (Pixel_7 API 36, PR-2 build): fresh install, switch OFF, mesh service running -> **zero app-uid TCP/UDP sockets** in /proc/net after 60 s (twice, before and after review fixes). Switch preset ON (tor_mode ON) -> relay WebSockets go to 127.0.0.1:9060 (Tor SOCKS); 3 external TCP sockets (ports 8080/443) INFERRED to be Tor ORPorts (not verified). Runtime toggle not exercised (no UI until PR-4).
-- PR-5: JVM meshup tests green (password room refused before legacy join); full suite 683 run / 23 failed (TD-29 set only) / 3 skipped; androidTest `com.bitchat.android.meshup` 13/13 incl. RoomsScreenTest 4/4; emulator: join by name -> Chats on the room, Rooms list shows it, Leave removes it.
-- PR-4: JVM ProfileViewModelsTest 8/8; unit suite failures = TD-29 set only; androidTest `com.bitchat.android.meshup` 9/9 on a cold-booted emulator (earlier crashes were emulator state). Emulator: name step shown after permissions, empty-name error, save -> shell and legacy header shows new name; Profile shows short fingerprint + Internet switch. **Runtime toggle ON**: relays via 127.0.0.1:9060 SOCKS, external sockets only to Tor-like ports (9001/443). **Toggle OFF**: relays disconnect, Tor SOCKS stops, but Tor guard connections persist (see In Progress).
-- PR-3: unit 673 run / 24 failed (TD-29 set only) / 3 skipped; first androidTest `MeshUpShellTest` 3/3 on emulator; emulator smoke: shell renders, 4 tabs, back from a tab returns to Chats, bottom-bar insets fixed by chief (double gap on Chats, status-bar overlap on new tabs).
-- PR-2: unit suite 661 run / 23 failed (TD-29 set only) / 3 skipped; app+wear assemble PASS; lint PASS.
-- Physical devices: NOT run
+## Deferred until after launch (Decision 016)
+- **P2-PR11 Arti native stop fix.** The Settings restart prompt is the mitigation: Tor guard connections persist after Internet OFF until a restart.
+- **Review follow-ups:**
+  - move the voice relay delay and private-file save off the packet-processor stripes
+  - type-specific caps for NOISE_HANDSHAKE and for announces that skip dedup
+  - H12: `SecurityManager.kt:84-85` / `WifiAwareMeshService.kt:1303`, where `ttl >= 7` lets an announce bypass dedup
+  - remaining full peer IDs in `Log.w`/`Log.e`
+  - `Log.println` relay text
+  - NoiseSession lock split; the receive side doesn't count messages toward rekey
+- **ML Kit replacement** with an offline QR decoder (Decision 013 addendum: possible Google telemetry).
+- **Minor:**
+  - the legacy header shows `##name`
+  - the legacy nickname edit bypasses `DisplayNameValidator`
+  - `meshup_*` strings are untranslated
+  - receipts and favourite notifications are dropped, not queued, while Internet is OFF
+
+## Blockers / environment
+- **TD-29:** five Robolectric SQLite test classes fail on Windows only; all pass on Ubuntu CI. The classes are ConversationDatabaseTest, ConversationRepositoryTest, IncomingMessageAdmissionTest, MediaSendingManagerMigrationTest and NostrDirectMessageHandlerTest.
+  - **New evidence (2026-10-08):** a DB test failed with the same `SQLITE_CANTOPEN` until its name was shortened, and `git worktree remove` failed with "Filename too long".
+  - **Likely root cause:** the **Windows MAX_PATH limit** on Robolectric's per-test temp paths.
+  - **Possible fixes** (both need owner approval because they touch build or system configuration):
+    - (a) a short `java.io.tmpdir` / Robolectric temp dir for the test task in `app/build.gradle.kts`
+    - (b) Windows long paths (`LongPathsEnabled`, a system setting) plus `git config core.longpaths true`
+  - **Until then:** keep new DB test names short, and treat CI as the gate.
+- Don't build inside OneDrive (file-lock `AccessDeniedException`).
+
+## Verification status (latest)
+- Unit tests (Windows): 835 run on the P2-PR9 branch; failures are the TD-29 set only.
+- CI: green on every merged PR, including the reproducible release byte comparison.
+- Emulator (Pixel_7, API 36):
+  - Internet OFF gives zero app sockets.
+  - Internet ON routes relays via Tor SOCKS.
+  - The restart prompt clears the Tor connections.
+  - Onboarding with location denied completes; the FGS runs as `connectedDevice` only.
+  - The name step, Rooms and Profile were exercised.
+- Physical devices: **not run** (launch gate).
 
 ## Next Action
-1. Phase 2 decisions recorded (Decision 015: D1 1 h, D2 200, D3 30s/1m/2m/2m, D7 type-"reset" confirm; others default).
-2. Merge PR #5 (Rooms tab) once CI is green.
-3. Then Phase 2 Track A (P2-PR1 replay fix, P2-PR2 TTL clamp, P2-PR3 release log stripping).
+1. Address the P2-PR9 review findings, then PR, CI and merge.
+2. Owner:
+   - create the signing key
+   - confirm GPLv3 / legal
+   - schedule a device test session
+3. Then, depending on whether password rooms are wanted in v1:
+   - if yes: Phase 3 planning (rooms)
+   - if no: a release-pipeline dry run and a licences screen
 
 ## Last Updated
-2026-10-07
+2026-10-08
