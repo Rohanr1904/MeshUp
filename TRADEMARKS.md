@@ -13,6 +13,7 @@ Under GPLv3 section 7(e), the licence **does not grant any right to use trade na
 - the name "NearBird" (including "Near Bird", "Nearbird" and confusingly similar names);
 - the NearBird app icon and logo, and the NearBird bird artwork [owner to confirm the exact list once the icon exists];
 - the app ID `io.github.rohanr1904.nearbird` and the official download pages and release signing certificate, as indications of the official build.
+- the project handle `nearbirdapp` on social platforms and, if created later, as a GitHub organisation. The source repository stays at `github.com/Rohanr1904`, because the app ID depends on that account.
 
 ## What you may do without asking
 
