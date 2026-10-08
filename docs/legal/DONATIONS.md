@@ -38,7 +38,7 @@ Gaps I could not close from primary pages: the full GitHub supported-regions lis
 ## Draft copy rules (Decision 017, playbook D)
 
 - Voluntary, no perks, no promises, no logos, no sponsor tiers. Thank-you list of names only, with consent.
-- No live links until the owner confirms the CA/lawyer review. `FUNDING.yml` must not be placed at `.github/FUNDING.yml` until then: GitHub reads that file from the default branch, so merging it would show a Sponsor button.
+- No live links until the owner confirms the CA/lawyer review. `proposals/FUNDING.yml.draft` is drafted but **NOT enabled**; `FUNDING.yml` must not be placed at `.github/FUNDING.yml` until then: GitHub reads that file from the default branch, so merging it would show a Sponsor button.
 - GitHub's terms say perks are optional and sponsors may be offered subscriptions "in exchange for goods, services" that the developer chooses [7]. NearBird chooses none.
 
 ## Indian-law questions (all NEEDS LAWYER / CA; restated from LEGAL_RESEARCH §2 and §5)

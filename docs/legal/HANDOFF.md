@@ -25,8 +25,10 @@
 7. Update `docs/AI_STATUS.md` launch gates 3–4 with the results.
 
 ## Owner actions (Claude cannot do these)
-- Run trademark searches for "NearBird", "Near Bird" and "Nearbyrd": IP India (classes 9, 38, 42), WIPO Global Brand Database, USPTO.
+- Run the IP India ESEARCH trademark search (portal needs an OTP login) for NearBird / Near Bird / Nearbyrd in classes 9, 38, 42. USPTO and WIPO were searched on 2026-10-08 (no identical mark; see `LEGAL_RESEARCH.md` section 4).
 - Create a dedicated NearBird contact mailbox.
 - Optionally set git to the GitHub noreply email for future commits.
 - Book the lawyer/CA review using `docs/legal/LAWYER_BRIEF.md`.
-- Later: buy `nearbird.app` (appears unregistered as of 2026-10-08; `.com` and `.org` have been taken since 2007).
+- Later, after device testing passes (Decision 017): buy `nearbird.app` (available on 2026-10-08, about US$8.75 first year, about US$15/yr renewal). Do not buy nearbird.com (parked, for sale at about US$2,999). Use the project handle `nearbirdapp`; keep the repo under github.com/Rohanr1904.
+
+Prepared for review by a qualified lawyer; not legal advice.

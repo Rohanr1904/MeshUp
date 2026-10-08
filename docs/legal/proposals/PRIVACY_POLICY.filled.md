@@ -110,6 +110,6 @@ If this policy changes, the "Last updated" date will change and the new policy w
 
 NearBird maintainers
 
-Contact: [NearBird contact email — dedicated mailbox, to be created]
+Contact: [CONTACT EMAIL]
 
-Grievance / privacy contact: [NearBird contact email — dedicated mailbox, to be created]
+Grievance / privacy contact: [CONTACT EMAIL]

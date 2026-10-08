@@ -11,6 +11,7 @@ Under GPLv3 section 7(e), the licence **does not grant any right to use trade na
 ## Covered marks
 
 - the name "NearBird" (including "Near Bird", "Nearbird" and confusingly similar names);
+- the project handle `nearbirdapp` on social platforms and, if created later, as a GitHub organisation. (The bare handle "nearbird" is already taken by unrelated parties on GitHub, X, Mastodon and Instagram, so `nearbirdapp` is the project handle; the repository stays at github.com/Rohanr1904 because the app ID depends on that account.)
 - the NearBird app icon and logo, and the NearBird bird artwork [owner to confirm the exact list once the icon exists];
 - the app ID `io.github.rohanr1904.nearbird` and the official download pages and release signing certificate, as indications of the official build.
 
@@ -40,9 +41,11 @@ NearBird is a security-sensitive messenger. People should be able to tell the ge
 
 ## Reporting misuse
 
-[NearBird contact email — dedicated mailbox, to be created]
+[CONTACT EMAIL]
 
 ## Questions for the lawyer
 
-- Is a policy file enough, or should "NearBird" be registered (India, Nice classes 9, 38, 42), and when?
+- Is a policy file enough, or should "NearBird" be registered (India, Nice classes 9, 38, 42), and when? A read-only search on 2026-10-08 found no identical mark in the USPTO or WIPO data, one possibly similar class 9 mark in India (GEARBIRD, 5948768), and the direct IP India search is still outstanding (owner action). See `LEGAL_RESEARCH.md` section 4.
 - Does the wording "unmodified official release may be redistributed" conflict with the app-ID and signature restrictions under GPLv3 section 7?
+
+Prepared for review by a qualified lawyer; not legal advice.
