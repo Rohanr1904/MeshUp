@@ -202,6 +202,40 @@ class GitHubReleaseClientTest {
         }
     )
 
+    @Test
+    fun `parseRelease skips unsigned universal apk and prefers the signed asset`() {
+        val release = GitHubReleaseClient.parseRelease(
+            """
+            {
+              "tag_name": "v1.0.0",
+              "assets": [
+                { "name": "nearbird-arm64.apk", "browser_download_url": "https://dl.example/a.apk", "size": 1 },
+                { "name": "nearbird-universal-unsigned.apk", "browser_download_url": "https://dl.example/u.apk", "size": 2 },
+                { "name": "nearbird-universal.apk", "browser_download_url": "https://dl.example/s.apk", "size": 3 }
+              ]
+            }
+            """.trimIndent()
+        )!!
+        assertEquals("nearbird-universal.apk", release.universalApkName)
+        assertEquals("https://dl.example/s.apk", release.universalApkUrl)
+        assertEquals(3L, release.universalApkSize)
+    }
+
+    @Test
+    fun `parseRelease returns null when only unsigned universal apk exists`() {
+        val release = GitHubReleaseClient.parseRelease(
+            """
+            {
+              "tag_name": "v1.0.0",
+              "assets": [
+                { "name": "nearbird-universal-unsigned.apk", "browser_download_url": "https://dl.example/u.apk", "size": 2 }
+              ]
+            }
+            """.trimIndent()
+        )
+        assertEquals(null, release)
+    }
+
     private fun successResponse(etag: String): MockResponse = MockResponse.Builder()
         .code(200)
         .addHeader("ETag", etag)

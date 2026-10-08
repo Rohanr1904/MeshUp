@@ -57,23 +57,26 @@ internal class GitHubReleaseClient(
             if (versionName.isBlank()) return null
 
             val assets = json.optJSONArray("assets") ?: return null
-            for (index in 0 until assets.length()) {
-                val asset = assets.getJSONObject(index)
-                val name = asset.optString("name")
-                val url = asset.optString("browser_download_url")
-                if (name.contains("universal", ignoreCase = true) &&
-                    name.endsWith(".apk", ignoreCase = true) &&
-                    url.startsWith("https://")
-                ) {
-                    return Release(
-                        versionName = versionName,
-                        universalApkSize = asset.optLong("size", 0L),
-                        universalApkUrl = url,
-                        universalApkName = name
-                    )
+            // Releases also carry `*-unsigned.apk` build outputs, which never pass the
+            // signer check. Prefer the exact signed asset name, then any signed universal APK.
+            val candidates = (0 until assets.length())
+                .map { assets.getJSONObject(it) }
+                .filter { asset ->
+                    val name = asset.optString("name")
+                    name.contains("universal", ignoreCase = true) &&
+                        !name.contains("unsigned", ignoreCase = true) &&
+                        name.endsWith(".apk", ignoreCase = true) &&
+                        asset.optString("browser_download_url").startsWith("https://")
                 }
-            }
-            null
+            val asset = candidates.firstOrNull {
+                it.optString("name") == AppConstants.Release.UNIVERSAL_APK_ASSET
+            } ?: candidates.firstOrNull() ?: return null
+            Release(
+                versionName = versionName,
+                universalApkSize = asset.optLong("size", 0L),
+                universalApkUrl = asset.optString("browser_download_url"),
+                universalApkName = asset.optString("name")
+            )
         }.getOrNull()
     }
 
