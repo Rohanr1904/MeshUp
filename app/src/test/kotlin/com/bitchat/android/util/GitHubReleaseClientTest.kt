@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -201,6 +202,91 @@ class GitHubReleaseClientTest {
             true
         }
     )
+
+    @Test
+    fun `parseRelease skips unsigned universal apk and prefers the signed asset`() {
+        val release = GitHubReleaseClient.parseRelease(
+            """
+            {
+              "tag_name": "v1.0.0",
+              "assets": [
+                { "name": "nearbird-arm64.apk", "browser_download_url": "https://dl.example/a.apk", "size": 1 },
+                { "name": "nearbird-universal-unsigned.apk", "browser_download_url": "https://dl.example/u.apk", "size": 2 },
+                { "name": "nearbird-universal.apk", "browser_download_url": "https://dl.example/s.apk", "size": 3 }
+              ]
+            }
+            """.trimIndent()
+        )!!
+        assertEquals("nearbird-universal.apk", release.universalApkName)
+        assertEquals("https://dl.example/s.apk", release.universalApkUrl)
+        assertEquals(3L, release.universalApkSize)
+    }
+
+    @Test
+    fun `parseRelease returns null when only unsigned universal apk exists`() {
+        val release = GitHubReleaseClient.parseRelease(
+            """
+            {
+              "tag_name": "v1.0.0",
+              "assets": [
+                { "name": "nearbird-universal-unsigned.apk", "browser_download_url": "https://dl.example/u.apk", "size": 2 }
+              ]
+            }
+            """.trimIndent()
+        )
+        assertNull(release)
+    }
+
+    @Test
+    fun `parseRelease skips unsigned names case-insensitively and non-https signed assets`() {
+        val release = GitHubReleaseClient.parseRelease(
+            """
+            {
+              "tag_name": "v1.0.0",
+              "assets": [
+                { "name": "Nearbird-Universal-UNSIGNED.apk", "browser_download_url": "https://dl.example/u.apk", "size": 2 },
+                { "name": "nearbird-universal.apk", "browser_download_url": "http://dl.example/s.apk", "size": 3 }
+              ]
+            }
+            """.trimIndent()
+        )
+        assertNull(release)
+    }
+
+    @Test
+    fun `parseRelease falls back to another signed universal apk when the exact name is absent`() {
+        val release = GitHubReleaseClient.parseRelease(
+            """
+            {
+              "tag_name": "v1.0.0",
+              "assets": [
+                { "name": "nearbird-universal-unsigned.apk", "browser_download_url": "https://dl.example/u.apk", "size": 2 },
+                { "name": "other-universal.apk", "browser_download_url": "https://dl.example/o.apk", "size": 4 }
+              ]
+            }
+            """.trimIndent()
+        )!!
+        assertEquals("other-universal.apk", release.universalApkName)
+        assertEquals(4L, release.universalApkSize)
+    }
+
+    @Test
+    fun `cached unsigned asset is discarded and refetched without an etag`() = runTest {
+        context.getSharedPreferences("apk_release_metadata", Context.MODE_PRIVATE).edit()
+            .putString("version", "1.0.0")
+            .putLong("size", 2L)
+            .putString("url", "https://dl.example/u.apk")
+            .putString("name", "nearbird-universal-unsigned.apk")
+            .putString("etag", "release-v1")
+            .putLong("fetched_at", nowMillis - 31 * 60_000L)
+            .commit()
+        server.enqueue(successResponse(etag = "release-v1"))
+
+        val snapshot = client().latestRelease().getOrThrow()
+
+        assertNull(server.takeRequest().headers["If-None-Match"])
+        assertEquals("bitchat-android-universal.apk", snapshot.release.universalApkName)
+    }
 
     private fun successResponse(etag: String): MockResponse = MockResponse.Builder()
         .code(200)
