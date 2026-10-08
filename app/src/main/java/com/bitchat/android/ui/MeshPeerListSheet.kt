@@ -1831,7 +1831,8 @@ fun PrivateChatSheet(
                         onNicknameClick = { /* handle mention */ },
                         onMessageLongPress = { /* handle long press */ },
                         onCancelTransfer = { msg -> viewModel.cancelMediaSend(msg.id) },
-                        onImageClick = { _, _, _ -> /* handle image click */ }
+                        onImageClick = { _, _, _ -> /* handle image click */ },
+                        onRetryMessage = { msg -> viewModel.retryPrivateMessage(msg.id) }
                     )
 
                     // Input section. No divider here: ChatInputSection draws its own fade and

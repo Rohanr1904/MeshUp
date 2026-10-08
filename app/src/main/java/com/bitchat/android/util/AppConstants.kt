@@ -161,6 +161,8 @@ object AppConstants {
     object Release {
         /** GitHub "owner/repo" slug hosting NearBird releases. Change here if the repo is renamed. */
         const val GITHUB_REPO: String = "Rohanr1904/MeshUp"
+        /** Public source repository page (GPLv3 source offer, shown on the licences screen). */
+        const val SOURCE_URL: String = "https://github.com/$GITHUB_REPO"
         const val GITHUB_API_LATEST_URL: String =
             "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
         const val GITHUB_LATEST_DOWNLOAD_BASE: String =

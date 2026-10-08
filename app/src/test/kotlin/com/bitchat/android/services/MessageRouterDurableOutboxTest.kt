@@ -56,6 +56,12 @@ class MessageRouterDurableOutboxTest {
         ContactDirectory.identityManagerProvider = { identityManager }
 
         mesh = mock()
+        // P2-PR9: the router sends through the reporting API; run its default (session check +
+        // sendPrivateMessage) on the mock so existing sendPrivateMessage verifications still apply.
+        org.mockito.kotlin.doCallRealMethod().whenever(mesh).sendPrivateMessageReporting(
+            org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(),
+            org.mockito.kotlin.any(), org.mockito.kotlin.any()
+        )
         whenever(mesh.myPeerID).thenReturn(myPeerID)
         whenever(mesh.getPeerNicknames()).thenReturn(mapOf(peerID to "peer"))
         ContactDirectory.initialize(context) { mesh }
@@ -482,6 +488,7 @@ class MessageRouterDurableOutboxTest {
         val router = newRouter()
         router.sendPrivate("hi", peerID, "peer", "m1")
         await(router)
+        statuses.clear() // P2-PR9: a first transmit sets Sent; the expiry itself must add nothing
         fakeTime += AppConstants.Router.OUTBOX_EXPIRY_MS + 1
         router.tickOutbox()
         await(router)
@@ -509,6 +516,7 @@ class MessageRouterDurableOutboxTest {
         val router = newRouter()
         router.rehydrate()
         await(router)
+        statuses.clear() // P2-PR9: a first transmit sets Sent; the expiry itself must add nothing
         fakeTime += AppConstants.Router.OUTBOX_EXPIRY_MS + 1
         router.tickOutbox()
         await(router)
@@ -531,7 +539,7 @@ class MessageRouterDurableOutboxTest {
         assertEquals(MessageRouter.RouteResult.QUEUED, router.sendPrivate("q", peerID, "peer", "q1"))
         await(router)
         assertEquals(OutboxState.QUEUED, store.rows["q1"]!!.state)
-        assertTrue(statuses.isEmpty())
+        assertTrue(statuses.all { it.second is DeliveryStatus.Sent }) // P2-PR9: Sent only, no Failed
     }
 
     @Test

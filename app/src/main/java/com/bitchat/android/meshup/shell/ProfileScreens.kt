@@ -100,7 +100,7 @@ fun NameStepScreen(profile: ProfileManager, modifier: Modifier = Modifier) {
 
 /** Profile tab: display name (editable), own short fingerprint, and the Settings section. */
 @Composable
-fun ProfileScreen(profile: ProfileManager) {
+fun ProfileScreen(profile: ProfileManager, onOpenLicences: () -> Unit = {}) {
     val name by profile.displayName.collectAsState()
     var editing by remember { mutableStateOf(false) }
     val fingerprint = remember { profile.shortFingerprint() }
@@ -223,6 +223,9 @@ fun ProfileScreen(profile: ProfileManager) {
         }
         TextButton(onClick = { context.openSystemSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS) }) {
             Text(stringResource(R.string.meshup_settings_power_saver))
+        }
+        TextButton(onClick = onOpenLicences, modifier = Modifier.testTag("profile_licences_row")) {
+            Text(stringResource(R.string.meshup_settings_licenses))
         }
     }
 }

@@ -226,7 +226,9 @@ fun MessagesList(
     onNicknameClick: ((String) -> Unit)? = null,
     onMessageLongPress: ((BitchatMessage) -> Unit)? = null,
     onCancelTransfer: ((BitchatMessage) -> Unit)? = null,
-    onImageClick: ((String, List<String>, Int) -> Unit)? = null
+    onImageClick: ((String, List<String>, Int) -> Unit)? = null,
+    /** MeshUp P2-PR9 (D5): Retry on a Failed own private text message; null hides the action. */
+    onRetryMessage: ((BitchatMessage) -> Unit)? = null
 ) {
     val resolvedMentionPeerIdentities = remember(messages, mentionPeerIdentities) {
         mentionPeerIdentities ?: buildMentionPeerIdentityMap(messages)
@@ -374,6 +376,7 @@ fun MessagesList(
                 onMessageLongPress = onMessageLongPress,
                 onCancelTransfer = onCancelTransfer,
                 onImageClick = onImageClick,
+                onRetryMessage = onRetryMessage,
                 modifier = Modifier
                     // Animates the shift when a neighbour is inserted or removed: this is what
                     // makes the conversation glide up instead of jumping.
@@ -405,6 +408,7 @@ fun MessageItem(
     onMessageLongPress: ((BitchatMessage) -> Unit)? = null,
     onCancelTransfer: ((BitchatMessage) -> Unit)? = null,
     onImageClick: ((String, List<String>, Int) -> Unit)? = null,
+    onRetryMessage: ((BitchatMessage) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -478,7 +482,37 @@ fun MessageItem(
             }
         }
 
+        // MeshUp P2-PR9 (D5): Retry for own private text messages that failed.
+        if (onRetryMessage != null && message.isPrivate && message.sender == currentUserNickname &&
+            message.type == BitchatMessageType.Message && message.deliveryStatus is DeliveryStatus.Failed
+        ) {
+            RetryMessageAction(onClick = { onRetryMessage(message) })
+        }
+
         // Link previews removed; links are now highlighted inline and clickable within the message text
+    }
+}
+
+/** Small end-aligned "Retry" text action shown beneath a Failed private message (D5). */
+@Composable
+private fun RetryMessageAction(onClick: () -> Unit) {
+    val description = stringResource(R.string.meshup_message_retry_description)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, end = 4.dp),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Text(
+            text = stringResource(R.string.meshup_message_retry),
+            color = MaterialTheme.colorScheme.error,
+            fontFamily = BitchatFontFamily,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+                .semantics { contentDescription = description }
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+        )
     }
 }
 

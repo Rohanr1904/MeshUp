@@ -76,6 +76,19 @@ class IncomingMessageAdmissionTest {
         assertFalse(IncomingMessageAdmission.admitToAppState(message))
     }
 
+    /** P2-PR9: a D3 resend / D5 retry reuses the ID; the receiver keeps one row, one notification. */
+    @Test
+    fun `resent id gives one row`() {
+        val message = privateMessage(id = "resent-id")
+        assertTrue(IncomingMessageAdmission.admitToAppState(message))
+        // false = the caller (BluetoothMeshService) skips delegate/notification dispatch.
+        assertFalse(IncomingMessageAdmission.admitToAppState(message.copy(content = "secret")))
+        assertEquals(
+            1,
+            AppStateStore.privateMessages.value.values.sumOf { list -> list.count { it.id == "resent-id" } }
+        )
+    }
+
     @Test
     fun `older retained replay is rejected after summary-only restart`() {
         val older = privateMessage(id = "older-retained")
