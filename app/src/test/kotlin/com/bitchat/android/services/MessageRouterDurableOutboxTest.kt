@@ -554,12 +554,42 @@ class MessageRouterDurableOutboxTest {
         }
         await(router)
         assertEquals(200, store.rows.size)
-        assertFalse(store.rows.containsKey("s0")) // oldest SENT evicted silently
+        assertFalse(store.rows.containsKey("s0")) // oldest SENT evicted ...
+        assertEquals(MessageRouter.REASON_NO_CONFIRMATION, failedReason("s0")) // ... as Failed, so Retry is offered
+        assertEquals(1, failedCount("s0"))
+        assertEquals(0, (1..200).count { failedCount("s$it") > 0 })
         peerOffline()
         assertEquals(MessageRouter.RouteResult.QUEUED, router.sendPrivate("q", peerID, "peer", "q1"))
         await(router)
         assertEquals(OutboxState.QUEUED, store.rows["q1"]!!.state)
-        assertTrue(statuses.all { it.second is DeliveryStatus.Sent }) // P2-PR9: Sent only, no Failed
+        // P2-PR9: Sent only; the single Failed is the evicted s0 (P2-PR13).
+        assertTrue(statuses.filter { it.first != "s0" }.all { it.second is DeliveryStatus.Sent })
+    }
+
+    @Test
+    fun `flush that pushes SENT over the cap fails the oldest, sends the flushed message, and does not crash`() {
+        peerReady()
+        val router = newRouter()
+        repeat(200) { i ->
+            fakeTime += 1
+            router.sendPrivate("c$i", peerID, "peer", "s$i")
+        }
+        peerOffline()
+        fakeTime += 1
+        assertEquals(MessageRouter.RouteResult.QUEUED, router.sendPrivate("q", peerID, "peer", "q1"))
+        await(router)
+
+        peerReady()
+        router.onSessionEstablished(peerID) // QUEUED -> SENT: 201 SENT rows
+        await(router)
+
+        verify(mesh).sendPrivateMessage(any(), any(), any(), org.mockito.kotlin.eq("q1"))
+        assertEquals(OutboxState.SENT, store.rows["q1"]!!.state)
+        assertEquals(200, store.rows.size)
+        assertFalse(store.rows.containsKey("s0"))
+        assertEquals(MessageRouter.REASON_NO_CONFIRMATION, failedReason("s0"))
+        assertEquals(1, failedCount("s0"))
+        assertEquals(0, failedCount("q1"))
     }
 
     @Test

@@ -34,8 +34,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   skipped once panic ([clearAllAndAwait]) has advanced it. Status updates ([statusSink] ->
  *   AppStateStore) are always issued outside the monitor (AppStateStore calls back on ACKs).
  * - MESH: row persisted as SENT; removed by a matching DELIVERED/READ ACK, as
- *   Failed("No delivery confirmation") after OUTBOX_EXPIRY_MS from creation (amendment 3), or
- *   silently (status kept) by the per-peer SENT cap (oldest first).
+ *   Failed("No delivery confirmation") after OUTBOX_EXPIRY_MS from creation or when the
+ *   per-peer SENT cap evicts it (oldest first) (amendment 3).
  * - QUEUED: row persisted as QUEUED; expires to Failed after OUTBOX_EXPIRY_MS from creation (D1).
  * - NOSTR routes and Nostr-alias conversations are never persisted (D4); a queued row that is
  *   flushed via Nostr is removed.
@@ -154,7 +154,7 @@ class MessageRouter internal constructor(
         private const val OUTBOX_EXPIRY_MS = AppConstants.Router.OUTBOX_EXPIRY_MS
         private const val PER_PEER_LIMIT = AppConstants.Router.OUTBOX_PER_PEER_LIMIT
         private const val GLOBAL_LIMIT = AppConstants.Router.OUTBOX_GLOBAL_LIMIT
-        // Decision 015 amendment: SENT rows have their own per-peer cap (oldest evicted silently).
+        // Decision 015 amendment: SENT rows have their own per-peer cap (oldest evicted as Failed).
         private const val SENT_PER_PEER_LIMIT = AppConstants.Router.OUTBOX_PER_PEER_LIMIT
         private val RESEND_BACKOFF_MS = AppConstants.Router.OUTBOX_RESEND_BACKOFF_MS
         private val HANDSHAKE_RETRY_BACKOFF_MS = AppConstants.Router.HANDSHAKE_RETRY_BACKOFF_MS
@@ -512,6 +512,10 @@ class MessageRouter internal constructor(
             currentFingerprint(resolution, meshTarget),
             ContactIdentityResolver.fingerprintFromContactConversationId(conversationID)
         )
+        // The SENT cap mutates the queue (P2-PR13), so it runs after this iteration, and never
+        // evicts a message handed to the transport in this flush.
+        val cappedKeys = mutableSetOf<String>()
+        val sentNow = mutableSetOf<String>()
         val iterator = queued.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
@@ -566,7 +570,8 @@ class MessageRouter internal constructor(
                         row.recipientFingerprint = sessionFingerprint
                         submit { persistence.updateRecipient(id, null, sessionFingerprint) }
                     }
-                    enforceSentCapLocked(row.conversationKey)
+                    cappedKeys += row.conversationKey
+                    sentNow += id
                 }
             } else {
                 nostr.sendPrivateMessage(entry.content, nostrTarget, entry.nickname, entry.messageID)
@@ -576,6 +581,7 @@ class MessageRouter internal constructor(
                 pendingEffects += Effect.Status(entry.messageID, DeliveryStatus.Sent)
             }
         }
+        cappedKeys.forEach { enforceSentCapLocked(it, exclude = sentNow) }
         if (queued.isEmpty()) {
             outbox.remove(conversationID, queued)
             outbox.remove(peerID, queued)
@@ -630,20 +636,28 @@ class MessageRouter internal constructor(
             nextAttemptAt = nextAttemptAt
         )
         submit { onPersisted(row, persistence.enqueue(row)) }
-        enforceSentCapLocked(key)
+        enforceSentCapLocked(key, exclude = setOf(entry.messageID))
     }
 
-    /** SENT rows: own per-peer cap; the oldest is dropped silently (its status is kept). */
-    private fun enforceSentCapLocked(conversationKey: String) {
+    /**
+     * SENT rows: own per-peer cap. The oldest rows over the cap are removed and become
+     * Failed("No delivery confirmation"), so Retry is offered (amendment 3, P2-PR13). Rows in
+     * [exclude] (being sent right now) are never evicted, even after a wall-clock step back.
+     * Callers must not be iterating an outbox list: eviction removes the row from the queue.
+     */
+    private fun enforceSentCapLocked(conversationKey: String, exclude: Set<String> = emptySet()) {
         val sent = durableRows.entries
             .filter { it.value.conversationKey == conversationKey && it.value.state == OutboxState.SENT }
         if (sent.size <= SENT_PER_PEER_LIMIT) return
-        sent.sortedBy { it.value.createdAt }
+        sent.filterNot { it.key in exclude }
+            .sortedBy { it.value.createdAt }
             .take(sent.size - SENT_PER_PEER_LIMIT)
             .map { it.key }
             .forEach { id ->
-                Log.d(TAG, "SENT cap reached; dropping oldest row msg_id=${Redact.id(id)}")
+                Log.w(TAG, "SENT cap reached; failing oldest row msg_id=${Redact.id(id)}")
+                removeFromQueueLocked(id) // a restored copy must not resend it after the Failed
                 dropDurableLocked(id)
+                pendingEffects += Effect.Status(id, DeliveryStatus.Failed(REASON_NO_CONFIRMATION))
             }
     }
 

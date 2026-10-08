@@ -110,7 +110,7 @@ internal class OutboxStore(
     /**
      * D2 admission (Decision 015 amendment, P2-PR8): the per-conversation and global limits count
      * QUEUED rows only and apply only to QUEUED inserts. SENT rows are bounded by the router (own
-     * per-peer cap with silent eviction, and the 1 h D1 lifetime), so they never block a new send.
+     * per-peer cap evicting the oldest as Failed, and the 1 h D1 lifetime), so they never block a new send.
      */
     fun enqueue(entry: OutboxEntry): OutboxEnqueueResult {
         val db = helper.writableDatabase
