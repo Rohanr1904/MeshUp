@@ -57,24 +57,29 @@ internal class GitHubReleaseClient(
             if (versionName.isBlank()) return null
 
             val assets = json.optJSONArray("assets") ?: return null
-            for (index in 0 until assets.length()) {
-                val asset = assets.getJSONObject(index)
-                val name = asset.optString("name")
-                val url = asset.optString("browser_download_url")
-                if (name.contains("universal", ignoreCase = true) &&
-                    name.endsWith(".apk", ignoreCase = true) &&
-                    url.startsWith("https://")
-                ) {
-                    return Release(
-                        versionName = versionName,
-                        universalApkSize = asset.optLong("size", 0L),
-                        universalApkUrl = url,
-                        universalApkName = name
-                    )
+            // Releases also carry `*-unsigned.apk` reproducibility inputs. Describe the signed
+            // asset: prefer its exact name, then any other signed universal APK.
+            val candidates = (0 until assets.length())
+                .map { assets.getJSONObject(it) }
+                .filter { asset ->
+                    isSignedUniversalApkName(asset.optString("name")) &&
+                        asset.optString("browser_download_url").startsWith("https://")
                 }
-            }
-            null
+            val asset = candidates.firstOrNull {
+                it.optString("name") == AppConstants.Release.UNIVERSAL_APK_ASSET
+            } ?: candidates.firstOrNull() ?: return null
+            Release(
+                versionName = versionName,
+                universalApkSize = asset.optLong("size", 0L),
+                universalApkUrl = asset.optString("browser_download_url"),
+                universalApkName = asset.optString("name")
+            )
         }.getOrNull()
+
+        private fun isSignedUniversalApkName(name: String): Boolean =
+            name.contains("universal", ignoreCase = true) &&
+                !name.contains("unsigned", ignoreCase = true) &&
+                name.endsWith(".apk", ignoreCase = true)
     }
 
     private val appContext = context.applicationContext
@@ -201,7 +206,8 @@ internal class GitHubReleaseClient(
     private fun readCache(): CachedRelease? = runCatching {
         val version = preferences.getString("version", null)?.takeIf { it.isNotBlank() } ?: return null
         val url = preferences.getString("url", null)?.takeIf { it.startsWith("https://") } ?: return null
-        val name = preferences.getString("name", null)?.takeIf { it.isNotBlank() } ?: return null
+        // Entries cached before unsigned assets were skipped are dropped, forcing one full refetch.
+        val name = preferences.getString("name", null)?.takeIf { isSignedUniversalApkName(it) } ?: return null
         CachedRelease(
             release = Release(
                 versionName = version,
@@ -245,6 +251,11 @@ internal class GitHubReleaseClient(
             })
         }
 
+    /**
+     * Release metadata for the update notice (version and size only). [universalApkUrl] and
+     * [universalApkName] are informational: downloads always use the fixed URLs in
+     * [DefaultApkDownloadSources], never a URL from release JSON.
+     */
     data class Release(
         val versionName: String,
         val universalApkSize: Long,
