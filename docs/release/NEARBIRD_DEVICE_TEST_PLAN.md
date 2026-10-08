@@ -44,6 +44,7 @@ For deeper transport coverage, see the upstream matrix in `docs/device-transport
 | C4 | Keep phone 2 away for about 8 minutes after the message was handed to the mesh but not acknowledged. To force this, send while connected and immediately switch phone 2's Bluetooth off. | It shows **Failed** with **Retry** after about 7.5 min | SHOULD |
 | C5 | Tap **Retry** with phone 2 back in range | Delivered, with no duplicate on phone 2 | MUST |
 | C6 | Queue a message (C1) and wait more than 1 hour | It becomes **Failed** ("Not delivered") | SHOULD |
+| C7 | Send while connected, then **immediately** take phone 2 out of range (Bluetooth off) and keep it away for more than 1 hour | It shows **Failed** with **Retry**, not "Sent" forever (Decision 015 amendment 3). Retry with phone 2 back in range delivers it once. | SHOULD |
 
 ## D. Multi-hop relay (3 phones)
 | # | Step | Expected | Must? |
@@ -89,7 +90,7 @@ Copy this table once per test session.
 |---|---|---|
 | A1–A6 | | |
 | B1–B5 | | |
-| C1–C6 | | |
+| C1–C7 | | |
 | D1–D3 | | |
 | E1–E3 | | |
 | F1–F6 | | |
