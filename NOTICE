@@ -1,0 +1,61 @@
+NearBird
+========
+
+NearBird is free software, licensed under the GNU General Public License,
+version 3 (see LICENSE.md). It comes with ABSOLUTELY NO WARRANTY.
+
+Upstream work
+-------------
+NearBird is a modified version of "bitchat for Android" by permissionlesstech
+and its contributors, which is also licensed under the GNU General Public
+License, version 3.
+
+  Upstream project: bitchat for Android
+  Upstream source:  https://github.com/permissionlesstech/bitchat-android
+  Related project:  bitchat (iOS/macOS), https://github.com/permissionlesstech/bitchat
+
+Copyright in the upstream code remains with its respective authors. Upstream
+authorship is recorded in the git history that this repository preserves
+(first upstream commit in this history: 2025-07-08).
+
+Modifications (GPLv3 section 5(a))
+----------------------------------
+This work was forked from the upstream project and modified by the NearBird
+maintainers. The NearBird fork was created on 2026-10-07 (commit 8d7de5e7,
+"chore: import BitChat Android foundation"). Changes made after that date
+include, among others: the NearBird name, application ID and release
+pipeline; the opt-in "Internet features" gate; a durable message outbox with
+delivery retry; encrypted on-device conversation storage; log redaction; the
+open-source licences screen; and this documentation.
+
+The complete, dated record of every modification is the git history of this
+repository: https://github.com/Rohanr1904/MeshUp (the repository may be renamed
+to NearBird; GitHub redirects the old name). Use `git log --follow <file>` to
+see the changes and dates for any single file.
+
+Wire compatibility
+------------------
+NearBird deliberately keeps the upstream wire-protocol identifiers (packet
+formats, Bluetooth service UUIDs, the "bitchat://" link scheme and similar) so
+that it can interoperate with existing bitchat clients. These identifiers are
+technical compatibility labels. They do not mean that NearBird is endorsed by,
+or is the same product as, bitchat.
+
+Name and logo
+-------------
+The GPL grants no trademark rights. See TRADEMARKS.md for the NearBird name
+and logo policy.
+
+Third-party components
+----------------------
+Notices for third-party libraries, vendored code, fonts, map data and native
+libraries are listed in docs/legal/THIRD_PARTY_LICENCES.md and are shown in the
+app under Settings > Open-source licences.
+
+Source code
+-----------
+The complete corresponding source code for each released binary is the tagged
+commit of this repository for that release (see the release notes). GitHub
+provides a source archive for every tag on the release page.
+
+Contact: [NearBird contact email — dedicated mailbox, to be created]
