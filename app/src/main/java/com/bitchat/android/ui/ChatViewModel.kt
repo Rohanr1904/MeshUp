@@ -436,15 +436,8 @@ class ChatViewModel(
         com.bitchat.android.services.AppStateStore.reloadConversationPersistence(
             getApplication()
         )
-        // Mark queued private messages as failed when the router gives up on them
-        try {
-            com.bitchat.android.services.MessageRouter.getInstance(getApplication(), mesh).onMessageExpired = { messageID ->
-                messageManager.updateMessageDeliveryStatus(
-                    messageID,
-                    com.bitchat.android.model.DeliveryStatus.Failed("Message expired before delivery")
-                )
-            }
-        } catch (_: Exception) { }
+        // MeshUp P2-PR8: the router (process-level owner) marks expired queued messages Failed
+        // itself via AppStateStore, so the ViewModel no longer registers onMessageExpired.
         // Hydrate UI state from process-wide AppStateStore to survive Activity recreation
         viewModelScope.launch {
             try { com.bitchat.android.services.AppStateStore.peers.collect { peers ->
@@ -1466,6 +1459,11 @@ class ChatViewModel(
         // Stop all message admission before wiping storage. The AppStateStore gate also rejects
         // any transport callback already in flight until the fresh identity is ready.
         clearAllMeshServiceData()
+        // MeshUp P2-PR8: invalidate and drain the router's outbox writer before the database wipe,
+        // so no queued enqueue/markSent can re-create an outbox row after it.
+        try {
+            com.bitchat.android.services.MessageRouter.tryGetInstance()?.clearAllAndAwait()
+        } catch (_: Exception) { }
         val conversationsCleared =
             com.bitchat.android.services.AppStateStore
                 .panicClearPrivateConversations()
@@ -1529,6 +1527,10 @@ class ChatViewModel(
         com.bitchat.android.services.AppStateStore
             .resumePrivateConversationsAfterPanic()
         recreateMeshServiceAfterPanic()
+        // MeshUp P2-PR8: private-message admission was paused for the wipe; resume it last.
+        try {
+            com.bitchat.android.services.MessageRouter.tryGetInstance()?.resumeAdmissionAfterPanic()
+        } catch (_: Exception) { }
 
         Log.w(TAG, "🚨 PANIC MODE COMPLETED - New identity: ${mesh.myPeerID}")
     }

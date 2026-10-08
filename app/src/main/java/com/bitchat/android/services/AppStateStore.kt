@@ -45,6 +45,14 @@ object AppStateStore {
 
     @Volatile
     private var conversationRepository: ConversationRepository? = null
+
+    /**
+     * Process-level owner of the durable DM outbox (MessageRouter on the phone). Notified, outside
+     * this store's lock, when a private message is acknowledged or removed so its outbox row and
+     * in-memory queue entry are dropped. Null on builds without a router (wear).
+     */
+    @Volatile
+    internal var outboxListener: PrivateMessageOutboxListener? = null
     private var privateConversationWritesSuspended = false
     private var privateConversationGeneration = 0L
 
@@ -451,6 +459,20 @@ object AppStateStore {
             // and enforces the same monotonic status rules as the in-memory path.
             conversationRepository?.updateDeliveryStatus(messageID, status)
         }
+        // Every DELIVERED/READ path (mesh, MeshCore, Nostr, UI) funnels through here, so this is
+        // the single ACK hook for the durable outbox. Called outside the lock (lock ordering).
+        val acknowledgedBy = when (status) {
+            is DeliveryStatus.Delivered -> status.to
+            is DeliveryStatus.Read -> status.by
+            else -> null
+        }
+        if (acknowledgedBy != null) {
+            try { outboxListener?.onPrivateMessageAcknowledged(messageID, acknowledgedBy) } catch (_: Exception) { }
+        }
+    }
+
+    private fun notifyOutboxRemoved(conversationID: String?, messageIDs: Collection<String>) {
+        try { outboxListener?.onPrivateMessagesRemoved(conversationID, messageIDs) } catch (_: Exception) { }
     }
 
     fun unifyPrivateChatsIntoPeer(targetPeerID: String, keysToMerge: List<String>) {
@@ -606,6 +628,14 @@ object AppStateStore {
     }
 
     fun deletePrivateConversation(peerOrConversationID: String): Set<String> {
+        val removed = deletePrivateConversationLocked(peerOrConversationID)
+        notifyOutboxRemoved(removed.first, removed.second)
+        return removed.second
+    }
+
+    private fun deletePrivateConversationLocked(
+        peerOrConversationID: String
+    ): Pair<String, Set<String>> {
         synchronized(this) {
             val canonicalID = ContactDirectory.canonicalConversationId(peerOrConversationID)
             val matchingKeys = _privateMessages.value.keys.filterTo(linkedSetOf()) { key ->
@@ -640,7 +670,7 @@ object AppStateStore {
             ) {
                 _selectedPrivateChatPeer.value = null
             }
-            return messageIDs
+            return canonicalID to messageIDs
         }
     }
 
@@ -689,6 +719,7 @@ object AppStateStore {
                 _selectedPrivateChatPeer.value = null
             }
         }
+        notifyOutboxRemoved(deletion.conversationID, deletion.messageIDs)
         return deletion
     }
 
@@ -768,6 +799,12 @@ object AppStateStore {
     }
 
     fun removePrivateMessage(messageID: String) {
+        var removedFromOutbox = false
+        removePrivateMessageLocked(messageID) { removedFromOutbox = true }
+        if (removedFromOutbox) notifyOutboxRemoved(null, listOf(messageID))
+    }
+
+    private fun removePrivateMessageLocked(messageID: String, onRemoved: () -> Unit) {
         synchronized(this) {
             val updated = _privateMessages.value.toMutableMap()
             var changed = false
@@ -785,6 +822,7 @@ object AppStateStore {
             }
             if (!changed) return
             conversationRepository?.deleteMessage(messageID)
+            onRemoved()
             _privateMessages.value = updated
             val retainedConversationIDs = updated.keys
                 .mapTo(mutableSetOf()) {
@@ -1118,3 +1156,15 @@ internal data class DeletedPrivateConversation(
 
 private val EMPTY_CONVERSATION_STORE_STATE =
     MutableStateFlow<ConversationStoreState>(ConversationStoreState.Ready).asStateFlow()
+
+/** Implemented by the process-level DM outbox owner; see [AppStateStore.outboxListener]. */
+internal interface PrivateMessageOutboxListener {
+    /**
+     * A DELIVERED or READ status was applied (or offered) for [messageID]. [acknowledgedBy] is
+     * `Delivered.to` / `Read.by`: the acking mesh peer ID, or the conversation ID for Nostr.
+     */
+    fun onPrivateMessageAcknowledged(messageID: String, acknowledgedBy: String)
+
+    /** The user deleted these messages, or the whole [conversationID] when non-null. */
+    fun onPrivateMessagesRemoved(conversationID: String?, messageIDs: Collection<String>)
+}

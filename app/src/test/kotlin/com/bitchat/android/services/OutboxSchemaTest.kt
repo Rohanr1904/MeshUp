@@ -666,4 +666,68 @@ class OutboxSchemaTest {
         assertTrue(repo.outboxRemove("r1"))
         assertTrue(repo.outboxLoadAll().entries.isEmpty())
     }
+
+    @Test
+    fun `reconcileOutbox drops stale rows, lists orphans`() {
+        val db = open().also { database = it }
+        // queued: Sending + outbox row -> kept, not orphan
+        db.upsertMessage("contact_alice", setOf("contact_alice"), "alice", message("queued"), true)
+        db.outbox.enqueue(entry("queued"))
+        // orphan: Sending text without an outbox row (crash between the two writes)
+        db.upsertMessage("contact_alice", setOf("contact_alice"), "alice", message("orphan"), true)
+        // delivered: outbox row left behind after the ACK -> dropped
+        db.upsertMessage(
+            "contact_alice", setOf("contact_alice"), "alice",
+            message("acked", DeliveryStatus.Delivered("alice", Date(6L))), true
+        )
+        db.outbox.enqueue(entry("acked"))
+        // missing: outbox row whose history row never existed -> dropped
+        db.outbox.enqueue(entry("missing"))
+        // incoming (null status) and Sending non-text rows are never orphans
+        db.upsertMessage("contact_alice", setOf("contact_alice"), "alice", message("incoming", null), true)
+        db.upsertMessage(
+            "contact_alice", setOf("contact_alice"), "alice",
+            message("file").copy(type = BitchatMessageType.File), true
+        )
+
+        val result = db.reconcileOutbox(sendingBeforeMs = Long.MAX_VALUE)
+
+        assertEquals(listOf("orphan"), result.orphanSendingMessageIds)
+        assertEquals(setOf("acked", "missing"), result.droppedOutboxMessageIds.toSet())
+        assertEquals(listOf("queued"), db.outbox.loadAll().entries.map { it.messageId })
+    }
+
+    @Test
+    fun `reconcileOutbox honours the watermark`() {
+        val db = open().also { database = it }
+        db.upsertMessage("contact_alice", setOf("contact_alice"), "alice", message("early"), true)
+        assertTrue(db.reconcileOutbox(sendingBeforeMs = 5L).orphanSendingMessageIds.isEmpty())
+        assertEquals(listOf("early"), db.reconcileOutbox(sendingBeforeMs = 6L).orphanSendingMessageIds)
+    }
+
+    @Test
+    fun `SENT rows neither count toward nor are refused by D2 admission`() {
+        val store = OutboxStore(open().also { database = it }, cipher, perConversationLimit = 2, globalLimit = 3)
+        repeat(4) {
+            assertEquals(
+                OutboxEnqueueResult.Enqueued,
+                store.enqueue(entry("s$it", state = OutboxState.SENT))
+            )
+        }
+        assertEquals(OutboxEnqueueResult.Enqueued, store.enqueue(entry("q0")))
+        assertEquals(OutboxEnqueueResult.Enqueued, store.enqueue(entry("q1")))
+        assertEquals(OutboxEnqueueResult.Overflow(2), store.enqueue(entry("q2")))
+    }
+
+    @Test
+    fun `updateRecipient re-keys conversation and fingerprint`() {
+        val store = open().also { database = it }.outbox
+        store.enqueue(entry("r1", conversation = "peer_old"))
+        assertTrue(store.updateRecipient("r1", "contact_alice", "ab".repeat(32)))
+        val loaded = store.loadAll().entries.single()
+        assertEquals("contact_alice", loaded.conversationId)
+        assertEquals("contact_alice", loaded.toPeerId)
+        assertEquals("ab".repeat(32), loaded.recipientFingerprint)
+        assertEquals("secret-r1", loaded.content)
+    }
 }

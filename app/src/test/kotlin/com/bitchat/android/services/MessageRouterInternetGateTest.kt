@@ -11,6 +11,7 @@ import com.bitchat.android.model.ReadReceipt
 import com.bitchat.android.nostr.NostrTransport
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +41,8 @@ class MessageRouterInternetGateTest {
     private lateinit var mesh: MeshService
     private lateinit var nostr: NostrTransport
     private var internetOn = false
+    private lateinit var store: FakeOutboxPersistence
+    private val statuses = mutableListOf<Pair<String, com.bitchat.android.model.DeliveryStatus>>()
     private lateinit var favorites: FavoritesPersistenceService
 
     @Before
@@ -80,6 +83,8 @@ class MessageRouterInternetGateTest {
         installFavorites(favorites)
 
         nostr = mock()
+        store = FakeOutboxPersistence()
+        statuses.clear()
         MessageRouter.disableSchedulerForTesting = true
         internetOn = false
     }
@@ -97,7 +102,10 @@ class MessageRouterInternetGateTest {
         f.set(null, service)
     }
 
-    private fun router() = MessageRouter(context, mesh, nostr) { internetOn }
+    private fun router() =
+        MessageRouter(context, mesh, nostr, store, { id, s -> statuses += id to s }) { internetOn }
+
+    private fun await(r: MessageRouter) = kotlinx.coroutines.runBlocking { r.awaitOutboxWrites() }
 
     @Test
     fun `offline mutual favourite is queued and Nostr untouched while Internet is off`() {
@@ -112,6 +120,32 @@ class MessageRouterInternetGateTest {
         val result = router().sendPrivate("hi", peerID, "peer", "m1")
         assertEquals(MessageRouter.RouteResult.NOSTR, result)
         verify(nostr).sendPrivateMessage("hi", noiseHex, "peer", "m1")
+    }
+
+    @Test
+    fun `Nostr route persists nothing (D4)`() {
+        internetOn = true
+        val r = router()
+        assertEquals(MessageRouter.RouteResult.NOSTR, r.sendPrivate("hi", peerID, "peer", "m1"))
+        await(r)
+        assertTrue(store.rows.isEmpty())
+        assertTrue(store.ops.isEmpty())
+    }
+
+    @Test
+    fun `queued row is removed when flushed via Nostr`() {
+        val r = router()
+        assertEquals(MessageRouter.RouteResult.QUEUED, r.sendPrivate("hi", peerID, "peer", "m1"))
+        await(r)
+        assertEquals(OutboxState.QUEUED, store.rows["m1"]!!.state)
+
+        internetOn = true
+        r.tickOutbox()
+        verify(nostr).sendPrivateMessage("hi", noiseHex, "peer", "m1")
+        await(r)
+        assertTrue(store.rows.isEmpty())
+        assertEquals(listOf("enqueue", "remove"), store.opsFor("m1"))
+        assertEquals(com.bitchat.android.model.DeliveryStatus.Sent, statuses.last { it.first == "m1" }.second)
     }
 
     @Test
@@ -154,6 +188,13 @@ class MessageRouterInternetGateTest {
         try {
             assertEquals(MessageRouter.RouteResult.DROPPED, router().sendPrivate("hi", alias, "x", "g1"))
             verify(nostr, never()).sendPrivateMessageGeohash(any(), any(), any(), anyOrNull())
+            // DROPPED is mapped to Failed by the router for every caller (VM, CommandProcessor,
+            // notification reply), so the message never stays Sending.
+            assertEquals(
+                com.bitchat.android.model.DeliveryStatus.Failed(MessageRouter.REASON_NOT_DELIVERED),
+                statuses.single { it.first == "g1" }.second
+            )
+            assertTrue(store.rows.isEmpty())
         } finally {
             com.bitchat.android.nostr.GeohashAliasRegistry.clear()
         }

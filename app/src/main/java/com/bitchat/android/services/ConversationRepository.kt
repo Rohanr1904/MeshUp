@@ -334,6 +334,17 @@ class ConversationRepository internal constructor(
     internal suspend fun outboxExpiredBefore(cutoff: Long): OutboxLoadResult =
         withContext(dispatcher) { database.outbox.expiredBefore(cutoff) }
 
+    internal suspend fun outboxReconcile(sendingBeforeMs: Long): OutboxReconcileResult =
+        withContext(dispatcher) { database.reconcileOutbox(sendingBeforeMs) }
+
+    internal suspend fun outboxUpdateRecipient(
+        messageId: String,
+        conversationId: String?,
+        recipientFingerprint: String?
+    ): Boolean = withContext(dispatcher) {
+        database.outbox.updateRecipient(messageId, conversationId, recipientFingerprint)
+    }
+
     /**
      * Drains earlier writes and completes the database wipe before returning.
      *
@@ -1194,6 +1205,34 @@ internal class ConversationDatabase(
             pruneDeletedMessageIDsLocked(this)
             unreferencedAttachmentPathsLocked(this, attachmentCandidates)
         }
+
+    /**
+     * P2-PR8 startup reconcile, in one transaction. Deletes outbox rows whose history row is gone
+     * or already Delivered (3) / Read (4), then lists own private text rows still Sending (1) that
+     * have no outbox row ("ours" uses the same predicate as the v4 -> v5 backfill). Only rows sent
+     * before [sendingBeforeMs] (the rehydrate watermark) qualify, so a send racing the startup
+     * reconcile in this process is never failed.
+     */
+    fun reconcileOutbox(sendingBeforeMs: Long): OutboxReconcileResult = writableDatabase.inTransaction {
+        val dropped = ArrayList<String>()
+        rawQuery(
+            "SELECT o.message_id FROM ${OutboxStore.TABLE} o " +
+                "LEFT JOIN private_messages p ON p.message_id = o.message_id " +
+                "WHERE p.message_id IS NULL OR p.delivery_type IN (3, 4)",
+            null
+        ).use { c -> while (c.moveToNext()) dropped += c.getString(0) }
+        dropped.forEach { delete(OutboxStore.TABLE, "message_id = ?", arrayOf(it)) }
+        val orphans = ArrayList<String>()
+        rawQuery(
+            "SELECT message_id FROM private_messages " +
+                "WHERE delivery_type = 1 AND is_private = 1 AND is_relay = 0 AND message_type = ? " +
+                "AND sent_at < ? " +
+                "AND message_id NOT IN (SELECT message_id FROM ${OutboxStore.TABLE}) " +
+                "ORDER BY arrival_sequence ASC",
+            arrayOf(BitchatMessageType.Message.ordinal.toString(), sendingBeforeMs.toString())
+        ).use { c -> while (c.moveToNext()) orphans += c.getString(0) }
+        OutboxReconcileResult(orphans, dropped)
+    }
 
     fun deleteMessage(messageID: String): Set<String> =
         writableDatabase.inTransaction {
