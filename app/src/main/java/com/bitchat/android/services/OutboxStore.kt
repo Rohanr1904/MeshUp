@@ -155,6 +155,19 @@ internal class OutboxStore(
             put("next_attempt_at", nextAttemptAt)
         })
 
+    /**
+     * P2-PR9 (R-1): a row optimistically marked SENT whose transmission was refused (no Noise
+     * session) goes back to QUEUED with no attempt consumed. Not a D2 admission: the message was
+     * already admitted.
+     */
+    fun markQueued(messageId: String, nextAttemptAt: Long): Boolean =
+        update(messageId, ContentValues().apply {
+            put("state", OutboxState.QUEUED.code)
+            put("attempts", 0)
+            put("next_attempt_at", nextAttemptAt)
+            put("last_error_code", OutboxError.NO_SESSION.code)
+        })
+
     fun recordAttempt(
         messageId: String,
         attempts: Int,

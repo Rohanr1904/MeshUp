@@ -11,6 +11,10 @@ import android.content.Context
 internal interface OutboxPersistence {
     suspend fun enqueue(entry: OutboxEntry): OutboxEnqueueResult
     suspend fun markSent(messageId: String, nextAttemptAt: Long): Boolean
+    /** P2-PR9: back to QUEUED (attempts 0) after the transport refused the send (no session). */
+    suspend fun markQueued(messageId: String, nextAttemptAt: Long): Boolean
+    /** P2-PR9: D3 resend bookkeeping for a SENT row. */
+    suspend fun recordAttempt(messageId: String, attempts: Int, nextAttemptAt: Long, lastError: OutboxError): Boolean
     suspend fun remove(messageId: String): Boolean
     suspend fun loadAll(): OutboxLoadResult
     /** See ConversationDatabase.reconcileOutbox; [sendingBeforeMs] is the orphan watermark. */
@@ -31,6 +35,10 @@ internal class RepositoryOutboxPersistence(context: Context) : OutboxPersistence
     override suspend fun enqueue(entry: OutboxEntry) = repository.outboxEnqueue(entry)
     override suspend fun markSent(messageId: String, nextAttemptAt: Long) =
         repository.outboxMarkSent(messageId, nextAttemptAt)
+    override suspend fun markQueued(messageId: String, nextAttemptAt: Long) =
+        repository.outboxMarkQueued(messageId, nextAttemptAt)
+    override suspend fun recordAttempt(messageId: String, attempts: Int, nextAttemptAt: Long, lastError: OutboxError) =
+        repository.outboxRecordAttempt(messageId, attempts, nextAttemptAt, lastError)
     override suspend fun remove(messageId: String) = repository.outboxRemove(messageId)
     override suspend fun loadAll() = repository.outboxLoadAll()
     override suspend fun reconcile(sendingBeforeMs: Long) = repository.outboxReconcile(sendingBeforeMs)

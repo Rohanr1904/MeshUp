@@ -53,6 +53,30 @@ internal class FakeOutboxPersistence(
         true
     }
 
+    override suspend fun markQueued(messageId: String, nextAttemptAt: Long): Boolean = synchronized(this) {
+        ops += "markQueued:$messageId"
+        val row = rows[messageId] ?: return false
+        rows[messageId] = row.copy(
+            state = OutboxState.QUEUED,
+            attempts = 0,
+            nextAttemptAt = nextAttemptAt,
+            lastError = OutboxError.NO_SESSION
+        )
+        true
+    }
+
+    override suspend fun recordAttempt(
+        messageId: String,
+        attempts: Int,
+        nextAttemptAt: Long,
+        lastError: OutboxError
+    ): Boolean = synchronized(this) {
+        ops += "recordAttempt:$messageId"
+        val row = rows[messageId] ?: return false
+        rows[messageId] = row.copy(attempts = attempts, nextAttemptAt = nextAttemptAt, lastError = lastError)
+        true
+    }
+
     override suspend fun remove(messageId: String): Boolean = synchronized(this) {
         ops += "remove:$messageId"
         rows.remove(messageId) != null

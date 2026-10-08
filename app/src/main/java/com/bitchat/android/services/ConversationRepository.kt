@@ -313,6 +313,9 @@ class ConversationRepository internal constructor(
     internal suspend fun outboxMarkSent(messageId: String, nextAttemptAt: Long): Boolean =
         withContext(dispatcher) { database.outbox.markSent(messageId, nextAttemptAt) }
 
+    internal suspend fun outboxMarkQueued(messageId: String, nextAttemptAt: Long): Boolean =
+        withContext(dispatcher) { database.outbox.markQueued(messageId, nextAttemptAt) }
+
     internal suspend fun outboxRecordAttempt(
         messageId: String,
         attempts: Int,

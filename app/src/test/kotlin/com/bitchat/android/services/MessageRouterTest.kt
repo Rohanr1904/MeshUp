@@ -50,6 +50,12 @@ class MessageRouterTest {
         ContactDirectory.identityManagerProvider = { identityManager }
 
         mesh = mock()
+        // P2-PR9: the router sends through the reporting API; run its default (session check +
+        // sendPrivateMessage) on the mock so existing sendPrivateMessage verifications still apply.
+        org.mockito.kotlin.doCallRealMethod().whenever(mesh).sendPrivateMessageReporting(
+            org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(),
+            org.mockito.kotlin.any(), org.mockito.kotlin.any()
+        )
         whenever(mesh.myPeerID).thenReturn(myPeerID)
         whenever(mesh.getPeerNicknames()).thenReturn(mapOf(peerID to "peer"))
 
