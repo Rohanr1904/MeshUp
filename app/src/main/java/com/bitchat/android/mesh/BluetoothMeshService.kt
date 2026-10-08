@@ -1058,7 +1058,34 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
      * Uses NoisePayloadType system exactly like iOS SimplifiedBluetoothService
      */
     fun sendPrivateMessage(content: String, recipientPeerID: String, recipientNickname: String, messageID: String? = null) {
-        if (content.isEmpty() || recipientPeerID.isEmpty()) return
+        sendPrivateMessageInternal(content, recipientPeerID, messageID, onResult = null)
+    }
+
+    /**
+     * MeshUp P2-PR9 (R-1): [sendPrivateMessage] with a transport outcome; see
+     * [MeshService.sendPrivateMessageReporting]. false = no established session (no handshake is
+     * started here; the router owns the handshake backoff).
+     */
+    fun sendPrivateMessageReporting(
+        content: String,
+        recipientPeerID: String,
+        messageID: String,
+        onResult: (Boolean) -> Unit
+    ) {
+        sendPrivateMessageInternal(content, recipientPeerID, messageID, onResult)
+    }
+
+    private fun sendPrivateMessageInternal(
+        content: String,
+        recipientPeerID: String,
+        messageID: String?,
+        onResult: ((Boolean) -> Unit)?
+    ) {
+        val report: (Boolean) -> Unit = { sent -> try { onResult?.invoke(sent) } catch (_: Exception) { } }
+        if (content.isEmpty() || recipientPeerID.isEmpty()) {
+            report(true) // nothing to transmit; not a session problem
+            return
+        }
         // Nicknames are presentation metadata. Routing and encryption are bound to the peer ID,
         // so a temporarily unresolved nickname must never suppress a private message.
         
@@ -1078,6 +1105,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                     if (tlvData == null) {
                         Log.e(TAG, "Failed to encode private message with TLV")
                         markPrivateMessageSendFailed(finalMessageID, "Message could not be encoded")
+                        report(true)
                         return@launch
                     }
                     
@@ -1106,16 +1134,28 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                     val signedPacket = signPacketBeforeBroadcast(packet)
                     if (signedPacket == null) {
                         markPrivateMessageSendFailed(finalMessageID, "Message could not be signed")
+                        report(true)
                         return@launch
                     }
                     broadcastRoutedPacket(RoutedPacket(signedPacket))
+                    report(true)
 
                     // The UI handles sent messages through its own sending path.
 
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to encrypt private message for $recipientPeerID: ${e.message}")
-                    markPrivateMessageSendFailed(finalMessageID, "Message could not be encrypted")
+                    Log.e(TAG, "Failed to encrypt private message for ${com.bitchat.android.util.Redact.id(recipientPeerID)}: ${e.javaClass.simpleName}")
+                    if (onResult != null && !encryptionService.hasEstablishedSession(recipientPeerID)) {
+                        // The session went away between the check and the encryption (R-1):
+                        // nothing was sent, so let the caller queue it again.
+                        report(false)
+                    } else {
+                        markPrivateMessageSendFailed(finalMessageID, "Message could not be encrypted")
+                        report(true)
+                    }
                 }
+            } else if (onResult != null) {
+                // MeshUp R-1: nothing was sent; the caller re-queues and drives the handshake.
+                report(false)
             } else {
                 // Fire and forget - initiate handshake but don't queue exactly like iOS
                 messageHandler.delegate?.initiateNoiseHandshake(recipientPeerID)

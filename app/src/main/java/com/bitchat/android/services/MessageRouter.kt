@@ -41,6 +41,39 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Limits (D2): 200 QUEUED per conversation, 2000 QUEUED global; overflow is Failed("queue full").
  * - [rehydrate] reloads rows after a restart. It is called once per process by the mesh owner
  *   (MeshServiceHolder.getUnifiedOrCreate), never by the UI, and retried if the load fails.
+ *
+ * P2-PR9 (Decision 015 D3/D5 + amendment, R-1):
+ * - Transmission: mesh sends are collected under the monitor and handed to
+ *   [MeshService.sendPrivateMessageReporting] after it is released (the transport may take Noise
+ *   locks whose holders call back into the router). The row is advanced optimistically (SENT,
+ *   attempt counted) before the send, so an ACK can always bind to it. If the transport reports
+ *   that no session was established (the session race), the row is put back exactly as it was:
+ *   a first transmission returns to QUEUED, a resend keeps SENT with the attempt not consumed,
+ *   and a handshake is kicked through the normal backoff.
+ * - D3 resend: a SENT row with no ACK is resent with the SAME message ID (re-encrypted under the
+ *   current session) when `next_attempt_at` is due. Counting the first transmission as attempt 1,
+ *   the wait after transmission n is OUTBOX_RESEND_BACKOFF_MS[min(n, size) - 1]: resends at
+ *   +30 s, then +1 min, +2 min and +2 min after the previous one (the last resend is about
+ *   5.5 min after the first send). After the last resend the row gets one final wait (the last
+ *   backoff value, 2 min); with still no ACK it becomes Failed("No delivery confirmation") and
+ *   is removed. A due resend is only made when the peer is ready, unblocked and its authenticated
+ *   identity still matches; an unreachable peer consumes no attempt (the row waits for the next
+ *   tick on which it is ready).
+ * - D3 vs the 1 h amendment: expiry is checked first on every tick. A SENT row older than
+ *   OUTBOX_EXPIRY_MS is dropped silently and keeps its status, even when attempts remain (e.g. a
+ *   restored row, or a peer that stayed unreachable). The explicit D3 Failed only happens for a
+ *   row that used up its schedule inside the hour, which is the normal case (about 7.5 min).
+ * - D5 [retry]: a Failed own private text message still in history is queued again with the
+ *   same ID and its expected recipient identity, then flushed (limits, identity and block checks
+ *   apply). A retry restarts both the 1 h bound and the D3 schedule. Refused after "Recipient
+ *   changed", for blocked peers, Nostr/geohash aliases (they keep their own path) and while a
+ *   panic wipe is in progress.
+ * - Status: a first mesh transmission the transport accepted moves Sending to Sent (monotonic).
+ * - Known gap (amendment, accepted by default): if the peer is unreachable right after the first
+ *   send, the SENT row expires silently at 1 h, the message keeps "Sent" and no Retry is shown.
+ * - Lock order: no transport/Noise operation (send, handshake) runs under this monitor; they are
+ *   collected and drained after release. Read-only peer lookups (getPeerInfo,
+ *   hasEstablishedSession, getPeerFingerprint) are lock-free map reads in the transports.
  */
 class MessageRouter internal constructor(
     private val context: Context,
@@ -77,7 +110,32 @@ class MessageRouter internal constructor(
         val conversationKey: String,
         var state: OutboxState,
         val createdAt: Long,
-        var recipientFingerprint: String?
+        var recipientFingerprint: String?,
+        /** Conversation the message is routed through (P2-PR9 resend target). */
+        val conversationID: String,
+        /** What to resend (P2-PR9, D3). */
+        val message: QueuedMessage,
+        /** Transmissions so far (D3); 0 while QUEUED. */
+        var attempts: Int = 0,
+        var nextAttemptAt: Long = 0L
+    )
+
+    /**
+     * One mesh transmission collected under the monitor and performed after it is released.
+     * The `prev*` snapshot restores the row if the transport reports no session (R-1).
+     */
+    private data class Transmit(
+        val messageID: String,
+        val conversationID: String,
+        val meshTarget: String,
+        val message: QueuedMessage,
+        val generation: Long,
+        /** Put back into the RAM queue on refusal (first transmission or restored row). */
+        val requeue: Boolean,
+        /** Durable state before the send; null for RAM-only (non-persistable) entries. */
+        val prevState: OutboxState?,
+        val prevAttempts: Int,
+        val prevNextAttemptAt: Long
     )
 
     private data class ConversationRetry(
@@ -107,6 +165,11 @@ class MessageRouter internal constructor(
         internal const val REASON_NOT_DELIVERED = "Not delivered"
         internal const val REASON_RECIPIENT_CHANGED = "Recipient changed"
         internal const val REASON_BLOCKED = "Recipient blocked"
+        internal const val REASON_NO_CONFIRMATION = "No delivery confirmation"
+
+        /** D3: wait after the [attempts]-th transmission (the last value is the final ACK wait). */
+        internal fun resendDelayAfter(attempts: Int): Long =
+            RESEND_BACKOFF_MS[(attempts - 1).coerceIn(0, RESEND_BACKOFF_MS.size - 1)]
 
         @Volatile private var INSTANCE: MessageRouter? = null
         internal var disableSchedulerForTesting = false
@@ -167,6 +230,12 @@ class MessageRouter internal constructor(
     // ACK neither resurrects nor resends the row. Bounded to the D2 global cap.
     private val recentlyAcked = LinkedHashMap<String, String>()
 
+    // Recipient fingerprint of rows dropped in this process (bounded): the D5 retry identity.
+    private val lastFingerprints = LinkedHashMap<String, String>()
+
+    // Test hook: runs between collecting sends (under the monitor) and transmitting them.
+    internal var beforeTransmitForTesting: (() -> Unit)? = null
+
     // IDs the user deleted or that were dropped for a block in this process; never restored.
     private val removedIds = LinkedHashSet<String>()
 
@@ -184,6 +253,12 @@ class MessageRouter internal constructor(
 
     // Status/expiry notifications collected under the monitor, delivered after releasing it.
     private val pendingEffects = ArrayList<Effect>()
+
+    // Mesh transmissions collected under the monitor, performed after releasing it (P2-PR9).
+    private val pendingTransmits = ArrayList<Transmit>()
+
+    // Handshake kicks collected under the monitor, started after releasing it (P2-PR9).
+    private val pendingHandshakes = LinkedHashSet<String>()
 
     private val schedulerScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var schedulerJob: kotlinx.coroutines.Job? = null
@@ -250,6 +325,9 @@ class MessageRouter internal constructor(
             recentlyAcked.clear()
             retryState.clear()
             pendingEffects.clear()
+            pendingTransmits.clear()
+            pendingHandshakes.clear()
+            lastFingerprints.clear()
         }
         Log.d(TAG, "Cleared all MessageRouter outbox messages and retry state")
     }
@@ -314,11 +392,21 @@ class MessageRouter internal constructor(
         val hasMesh = meshTarget?.let { isConnected(mesh, it) } == true
         if (meshTarget != null && isReady(mesh, meshTarget)) {
             Log.d(TAG, "Routing PM via mesh to ${Redact.id(meshTarget)} msg_id=${Redact.id(messageID)}")
-            if (persistable) {
-                val fingerprint = authenticatedFingerprint(meshTarget) ?: currentFingerprint(resolution, meshTarget)
-                persistSent(conversationID, QueuedMessage(content, recipientNickname, messageID, clock(), fingerprint))
+            val fingerprint = authenticatedFingerprint(meshTarget) ?: currentFingerprint(resolution, meshTarget)
+            val entry = QueuedMessage(content, recipientNickname, messageID, clock(), fingerprint)
+            synchronized(this) {
+                if (persistable) persistSent(conversationID, entry)
+                // A refused send (no session) goes back to QUEUED with no attempt used.
+                pendingTransmits += Transmit(
+                    messageID, conversationID, meshTarget, entry, generation,
+                    requeue = true,
+                    prevState = if (persistable) OutboxState.QUEUED else null,
+                    prevAttempts = 0,
+                    prevNextAttemptAt = entry.enqueuedAtMs
+                )
             }
-            mesh.sendPrivateMessage(content, meshTarget, recipientNickname, messageID)
+            drainTransmits()
+            dispatchEffects()
             return RouteResult.MESH
         } else if (canSendViaNostr(nostrTarget)) {
             Log.d(TAG, "Routing PM via Nostr to ${Redact.id(conversationID)} msg_id=${Redact.id(messageID)}")
@@ -340,6 +428,7 @@ class MessageRouter internal constructor(
             }
             Log.d(TAG, "Queued PM for ${Redact.id(conversationID)} (no mesh, no Nostr mapping) msg_id=${Redact.id(messageID)}")
             if (hasMesh) meshTarget?.let { kickHandshake(conversationID, it, immediate = true) }
+            dispatchEffects()
             return RouteResult.QUEUED
         }
     }
@@ -399,6 +488,7 @@ class MessageRouter internal constructor(
     // be lost between the empty check and the map removal.
     fun flushOutboxFor(peerID: String) {
         synchronized(this) { flushLocked(peerID) }
+        drainTransmits()
         dispatchEffects()
     }
 
@@ -446,15 +536,31 @@ class MessageRouter internal constructor(
                 }
             }
             if (viaMesh) {
-                mesh.sendPrivateMessage(entry.content, meshTarget!!, entry.nickname, entry.messageID)
                 iterator.remove()
-                // The row stays (SENT) until a matching ACK, its 1 h lifetime, or the SENT cap.
+                // The row stays (SENT) until a matching ACK, D3 Failed, its 1 h lifetime, or the
+                // SENT cap. It is advanced before the send so an ACK always finds it, and put back
+                // by [onTransmitRefused] if the transport had no session after all.
                 val row = durableRows[entry.messageID]
+                pendingTransmits += Transmit(
+                    entry.messageID, key, meshTarget!!, entry, generation,
+                    requeue = true,
+                    prevState = row?.state,
+                    prevAttempts = row?.attempts ?: 0,
+                    prevNextAttemptAt = row?.nextAttemptAt ?: 0L
+                )
                 if (row != null) {
-                    row.state = OutboxState.SENT
                     val id = entry.messageID
-                    val nextAttemptAt = clock() + RESEND_BACKOFF_MS[0]
-                    submit { persistence.markSent(id, nextAttemptAt) }
+                    // A restored SENT row is a D3 resend; a QUEUED row's first send is attempt 1.
+                    val attempts = if (row.state == OutboxState.SENT) row.attempts + 1 else 1
+                    val nextAttemptAt = clock() + resendDelayAfter(attempts)
+                    if (row.state == OutboxState.SENT) {
+                        submit { persistence.recordAttempt(id, attempts, nextAttemptAt, OutboxError.NO_ACK) }
+                    } else {
+                        row.state = OutboxState.SENT
+                        submit { persistence.markSent(id, nextAttemptAt) }
+                    }
+                    row.attempts = attempts
+                    row.nextAttemptAt = nextAttemptAt
                     if (row.recipientFingerprint == null && sessionFingerprint != null) {
                         // Security finding 5: bind backfilled/unknown rows to the authenticated peer.
                         row.recipientFingerprint = sessionFingerprint
@@ -497,8 +603,10 @@ class MessageRouter internal constructor(
             val queuedRows = durableRows.values.filter { it.state == OutboxState.QUEUED }
             if (queuedRows.size >= GLOBAL_LIMIT) return false
             if (queuedRows.count { it.conversationKey == key } >= PER_PEER_LIMIT) return false
-            durableRows[entry.messageID] =
-                DurableRow(key, OutboxState.QUEUED, entry.enqueuedAtMs, entry.recipientFingerprint)
+            durableRows[entry.messageID] = DurableRow(
+                key, OutboxState.QUEUED, entry.enqueuedAtMs, entry.recipientFingerprint,
+                conversationID, entry, attempts = 0, nextAttemptAt = entry.enqueuedAtMs
+            )
             val row = entry.toOutboxEntry(conversationID, OutboxState.QUEUED, attempts = 0, nextAttemptAt = entry.enqueuedAtMs)
             submit { onPersisted(row, persistence.enqueue(row)) }
         }
@@ -510,13 +618,16 @@ class MessageRouter internal constructor(
     @Synchronized
     private fun persistSent(conversationID: String, entry: QueuedMessage) {
         val key = conversationID.lowercase()
-        durableRows[entry.messageID] =
-            DurableRow(key, OutboxState.SENT, entry.enqueuedAtMs, entry.recipientFingerprint)
+        val nextAttemptAt = entry.enqueuedAtMs + resendDelayAfter(1)
+        durableRows[entry.messageID] = DurableRow(
+            key, OutboxState.SENT, entry.enqueuedAtMs, entry.recipientFingerprint,
+            conversationID, entry, attempts = 1, nextAttemptAt = nextAttemptAt
+        )
         val row = entry.toOutboxEntry(
             conversationID,
             OutboxState.SENT,
             attempts = 1,
-            nextAttemptAt = entry.enqueuedAtMs + RESEND_BACKOFF_MS[0]
+            nextAttemptAt = nextAttemptAt
         )
         submit { onPersisted(row, persistence.enqueue(row)) }
         enforceSentCapLocked(key)
@@ -583,7 +694,11 @@ class MessageRouter internal constructor(
 
     /** Forget a durable row and submit its deletion (ordered after any earlier write). */
     private fun dropDurableLocked(messageID: String) {
-        durableRows.remove(messageID)
+        // Remember the identity it was bound to, so a D5 retry is checked against it.
+        durableRows.remove(messageID)?.recipientFingerprint?.let { fingerprint ->
+            lastFingerprints[messageID] = fingerprint
+            if (lastFingerprints.size > ID_MEMORY_CAP) lastFingerprints.remove(lastFingerprints.keys.first())
+        }
         submit { persistence.remove(messageID) }
     }
 
@@ -755,19 +870,27 @@ class MessageRouter internal constructor(
                     continue
                 }
                 if (!conversationID.equals(row.conversationId, ignoreCase = true)) reKeyed += id to conversationID
-                durableRows[id] = DurableRow(conversationKey, row.state, row.createdAt, row.recipientFingerprint)
-                // SENT rows are queued again: we cannot know whether the ACK arrived, and a
-                // resend with the same message ID is deduplicated by the receiver.
-                outbox.getOrPut(conversationID) { mutableListOf() }.add(
-                    QueuedMessage(
-                        content = row.content,
-                        nickname = row.recipientNickname,
-                        messageID = id,
-                        enqueuedAtMs = row.createdAt,
-                        recipientFingerprint = row.recipientFingerprint,
-                        sentBefore = row.state == OutboxState.SENT
-                    )
+                val sent = row.state == OutboxState.SENT
+                val message = QueuedMessage(
+                    content = row.content,
+                    nickname = row.recipientNickname,
+                    messageID = id,
+                    enqueuedAtMs = row.createdAt,
+                    recipientFingerprint = row.recipientFingerprint,
+                    sentBefore = sent
                 )
+                // A SENT row was transmitted at least once (P2-PR8 markSent left attempts at 0).
+                val attempts = if (sent) maxOf(1, row.attempts) else 0
+                durableRows[id] = DurableRow(
+                    conversationKey, row.state, row.createdAt, row.recipientFingerprint,
+                    conversationID, message, attempts, row.nextAttemptAt
+                )
+                // SENT rows are queued again: we cannot know whether the ACK arrived, and a
+                // resend with the same message ID is deduplicated by the receiver. A SENT row
+                // whose D3 schedule is used up is not resent; the tick fails it when due.
+                if (!sent || attempts <= RESEND_BACKOFF_MS.size) {
+                    outbox.getOrPut(conversationID) { mutableListOf() }.add(message)
+                }
                 restored++
             }
             outbox.values.forEach { list -> list.sortBy { it.enqueuedAtMs } }
@@ -786,7 +909,13 @@ class MessageRouter internal constructor(
         failed.forEach { (id, reason) -> statusSink(id, DeliveryStatus.Failed(reason)) }
     }
 
+    /**
+     * Delivers what was collected under the monitor: handshake kicks first, then status/expiry
+     * effects. Must never be called while holding the monitor (lock order: the Noise session
+     * manager calls back into the router while holding its own lock).
+     */
     private fun dispatchEffects() {
+        drainHandshakes()
         val effects = synchronized(this) {
             if (pendingEffects.isEmpty()) return
             ArrayList(pendingEffects).also { pendingEffects.clear() }
@@ -812,7 +941,9 @@ class MessageRouter internal constructor(
         val current = retryState[conversationID]
         if (current != null && now < current.nextHandshakeAttemptAtMs) return
         val attempts = if (immediate) 0 else (current?.handshakeAttempts ?: 0)
-        try { mesh.initiateNoiseHandshake(meshTarget) } catch (_: Exception) { }
+        // Backoff bookkeeping stays under the monitor; the handshake itself is started by
+        // [drainHandshakes] after the monitor is released (P2-PR9 lock-order fix).
+        pendingHandshakes += meshTarget
         val backoff = HANDSHAKE_RETRY_BACKOFF_MS[attempts.coerceAtMost(HANDSHAKE_RETRY_BACKOFF_MS.size - 1)]
         retryState[conversationID] = ConversationRetry(
             handshakeAttempts = attempts + 1,
@@ -855,11 +986,14 @@ class MessageRouter internal constructor(
     internal fun tickOutbox(nowMs: Long = clock()) {
         retryRehydrateIfNeeded()
         synchronized(this) { tickLocked(nowMs) }
+        drainTransmits()
         dispatchEffects()
     }
 
     private fun tickLocked(nowMs: Long) {
+        // Order matters: the silent 1 h drop (amendment) wins over a D3 resend or Failed.
         expireSentRowsLocked(nowMs)
+        resendDueLocked(nowMs)
         outbox.keys.toList().forEach { conversationID ->
             expireOldEntriesLocked(conversationID, nowMs)
             val queued = outbox[conversationID] ?: return@forEach
@@ -890,6 +1024,294 @@ class MessageRouter internal constructor(
             .map { it.key }
             .filterNot { isQueuedLocked(it) } // rehydrated SENT entries expire via the queue below
             .forEach { dropDurableLocked(it) }
+    }
+
+    /**
+     * D3: resend due SENT rows that are not waiting in the RAM queue (restored rows are resent by
+     * the flush). Mesh only (D4: Nostr routes never get a SENT row). Runs after
+     * [expireSentRowsLocked], so rows past the 1 h bound never reach this point.
+     */
+    private fun resendDueLocked(nowMs: Long) {
+        val due = durableRows.entries
+            .filter { (id, row) ->
+                row.state == OutboxState.SENT && row.nextAttemptAt <= nowMs && !isQueuedLocked(id)
+            }
+            .map { it.key }
+        for (id in due) {
+            val row = durableRows[id] ?: continue
+            if (row.attempts > RESEND_BACKOFF_MS.size) {
+                // Schedule used up and the final wait elapsed without an ACK (D3).
+                Log.w(TAG, "No delivery confirmation after ${row.attempts} sends msg_id=${Redact.id(id)}")
+                dropDurableLocked(id)
+                pendingEffects += Effect.Status(id, DeliveryStatus.Failed(REASON_NO_CONFIRMATION))
+                continue
+            }
+            val resolution = ContactDirectory.resolve(row.conversationID)
+            val meshTarget = resolution.meshPeerID
+            if (meshTarget == null || !isReady(mesh, meshTarget)) {
+                // Unreachable: no attempt is consumed; still bounded by the 1 h expiry.
+                if (meshTarget != null && isConnected(mesh, meshTarget)) {
+                    kickHandshake(ContactDirectory.canonicalConversationId(row.conversationID), meshTarget, immediate = false)
+                }
+                continue
+            }
+            val sessionFingerprint = authenticatedFingerprint(meshTarget)
+            if (isBlocked(
+                    sessionFingerprint,
+                    row.recipientFingerprint,
+                    currentFingerprint(resolution, meshTarget),
+                    ContactIdentityResolver.fingerprintFromContactConversationId(row.conversationKey)
+                )
+            ) {
+                Log.w(TAG, "Recipient blocked; not resending msg_id=${Redact.id(id)}")
+                rememberRemovedLocked(id)
+                dropDurableLocked(id)
+                pendingEffects += Effect.Status(id, DeliveryStatus.Failed(REASON_BLOCKED))
+                continue
+            }
+            val expected = row.recipientFingerprint
+            if (expected != null) {
+                if (sessionFingerprint == null) continue // identity unknown: keep waiting
+                if (!expected.equals(sessionFingerprint, ignoreCase = true)) {
+                    Log.w(TAG, "Recipient identity changed; not resending msg_id=${Redact.id(id)}")
+                    dropDurableLocked(id)
+                    pendingEffects += Effect.Status(id, DeliveryStatus.Failed(REASON_RECIPIENT_CHANGED))
+                    continue
+                }
+            } else if (sessionFingerprint != null) {
+                row.recipientFingerprint = sessionFingerprint
+                submit { persistence.updateRecipient(id, null, sessionFingerprint) }
+            }
+            pendingTransmits += Transmit(
+                id, row.conversationID, meshTarget, row.message, generation,
+                requeue = false,
+                prevState = OutboxState.SENT,
+                prevAttempts = row.attempts,
+                prevNextAttemptAt = row.nextAttemptAt
+            )
+            val attempts = row.attempts + 1
+            val nextAttemptAt = nowMs + resendDelayAfter(attempts)
+            row.attempts = attempts
+            row.nextAttemptAt = nextAttemptAt
+            Log.d(TAG, "D3 resend $attempts for msg_id=${Redact.id(id)}")
+            submit { persistence.recordAttempt(id, attempts, nextAttemptAt, OutboxError.NO_ACK) }
+        }
+    }
+
+    /**
+     * Hands the collected transmissions to the transport. Never called under the monitor: the
+     * transport may report synchronously, and its session locks are taken by threads that call
+     * back into the router (onSessionEstablished).
+     *
+     * Each send is re-validated right before it goes out (P2-PR9 review): the panic generation,
+     * a delete/block since collection, the durable row still awaiting it, the block list and the
+     * authenticated recipient identity. Peer reads happen outside the monitor, the decision is
+     * taken under it, and the send itself happens outside it again.
+     */
+    private fun drainTransmits() {
+        val batch = synchronized(this) {
+            if (pendingTransmits.isEmpty()) return
+            ArrayList(pendingTransmits).also { pendingTransmits.clear() }
+        }
+        beforeTransmitForTesting?.invoke()
+        val service = mesh
+        batch.forEach { transmit ->
+            val sessionFingerprint = authenticatedFingerprint(transmit.meshTarget)
+            val contactFingerprint = ContactIdentityResolver.fingerprintFromContactConversationId(
+                ContactDirectory.canonicalConversationId(transmit.conversationID)
+            )
+            if (!stillSendable(transmit, sessionFingerprint, contactFingerprint)) return@forEach
+            try {
+                service.sendPrivateMessageReporting(
+                    transmit.message.content,
+                    transmit.meshTarget,
+                    transmit.message.nickname,
+                    transmit.messageID
+                ) { sent -> if (sent) onTransmitted(transmit) else onTransmitRefused(transmit) }
+            } catch (e: Exception) {
+                // Kept as sent: D3 resends (or the 1 h bound) take it from here.
+                Log.w(TAG, "Mesh send failed: ${e.javaClass.simpleName} msg_id=${Redact.id(transmit.messageID)}")
+            }
+        }
+        dispatchEffects()
+    }
+
+    /** Drain-time re-check (see [drainTransmits]); drops the send and its row when stale. */
+    private fun stillSendable(
+        transmit: Transmit,
+        sessionFingerprint: String?,
+        contactFingerprint: String?
+    ): Boolean = synchronized(this) {
+        val id = transmit.messageID
+        if (transmit.generation != generation || id in removedIds) return false
+        val row = durableRows[id]
+        // A durable send must still be awaited by its (optimistically SENT) row: an ACK, delete,
+        // expiry or the SENT cap since collection cancels it.
+        if (transmit.prevState != null && (row == null || row.state != OutboxState.SENT)) return false
+        val expected = row?.recipientFingerprint ?: transmit.message.recipientFingerprint
+        if (isBlocked(sessionFingerprint, expected, contactFingerprint)) {
+            Log.w(TAG, "Recipient blocked before send; dropping msg_id=${Redact.id(id)}")
+            rememberRemovedLocked(id)
+            removeFromQueueLocked(id)
+            if (row != null) dropDurableLocked(id)
+            pendingEffects += Effect.Status(id, DeliveryStatus.Failed(REASON_BLOCKED))
+            return false
+        }
+        if (expected != null && sessionFingerprint != null && !expected.equals(sessionFingerprint, ignoreCase = true)) {
+            Log.w(TAG, "Recipient identity changed before send; dropping msg_id=${Redact.id(id)}")
+            removeFromQueueLocked(id)
+            if (row != null) dropDurableLocked(id)
+            pendingEffects += Effect.Status(id, DeliveryStatus.Failed(REASON_RECIPIENT_CHANGED))
+            return false
+        }
+        true
+    }
+
+    /**
+     * The transport accepted the message. A first transmission moves the status to Sent (monotonic
+     * in AppStateStore: Delivered/Read are never downgraded). Not emitted when the row has gone
+     * meanwhile (ACK, delete, Failed), so a late callback cannot overwrite a newer state.
+     */
+    private fun onTransmitted(transmit: Transmit) {
+        if (transmit.prevState == OutboxState.SENT) return // D3 resend: status unchanged
+        val emit = synchronized(this) {
+            if (transmit.generation != generation || transmit.messageID in removedIds) return
+            transmit.prevState == null || durableRows[transmit.messageID]?.state == OutboxState.SENT
+        }
+        if (emit) try { statusSink(transmit.messageID, DeliveryStatus.Sent) } catch (_: Exception) { }
+    }
+
+    /**
+     * R-1 session race: the transport had no established session, so nothing went out. Restore
+     * the row to its pre-send state (no D3 attempt consumed) and kick the handshake the same way
+     * the queue path does; the entry is sent once the session is established. A refusal that
+     * arrives after an ACK, delete, block or panic restores nothing.
+     */
+    private fun onTransmitRefused(transmit: Transmit) {
+        val connected = isConnected(mesh, transmit.meshTarget) // peer read outside the monitor
+        synchronized(this) {
+            val id = transmit.messageID
+            if (transmit.generation != generation || id in removedIds) return
+            Log.d(TAG, "No session at send time; re-queueing msg_id=${Redact.id(id)}")
+            if (transmit.prevState != null) {
+                // Acked, deleted, expired or capped meanwhile: nothing to restore.
+                val row = durableRows[id] ?: return
+                row.attempts = transmit.prevAttempts
+                row.nextAttemptAt = transmit.prevNextAttemptAt
+                val attempts = transmit.prevAttempts
+                val nextAttemptAt = transmit.prevNextAttemptAt
+                if (transmit.prevState == OutboxState.QUEUED) {
+                    row.state = OutboxState.QUEUED
+                    submit { persistence.markQueued(id, nextAttemptAt) }
+                } else {
+                    submit { persistence.recordAttempt(id, attempts, nextAttemptAt, OutboxError.NO_SESSION) }
+                }
+            }
+            if (transmit.requeue && !isQueuedLocked(id)) {
+                outbox.getOrPut(transmit.conversationID) { mutableListOf() }.apply {
+                    add(transmit.message)
+                    sortBy { it.enqueuedAtMs }
+                }
+            }
+            if (connected) {
+                kickHandshake(
+                    ContactDirectory.canonicalConversationId(transmit.conversationID),
+                    transmit.meshTarget,
+                    immediate = true
+                )
+            }
+        }
+        dispatchEffects()
+    }
+
+    /**
+     * D5: re-send a Failed own private text message with the SAME message ID. Receivers dedupe by
+     * ID, so a retry of a message that was delivered but never acknowledged is harmless.
+     *
+     * The retry is a new delivery cycle: it is queued with a fresh creation time, so the 1 h
+     * bound (D1) and the D3 schedule both restart, and it is then flushed through the normal
+     * path. The queued entry carries the expected recipient identity (the fingerprint remembered
+     * from the failed row, else the one embedded in a contact_ conversation ID, else the currently
+     * authenticated one, which then gets bound), so the flush applies the same identity check as
+     * the first send and D3 (mismatch: Failed("Recipient changed"); unknown: keep waiting).
+     *
+     * Returns QUEUED when accepted (the flush may already have sent it), FAILED when the queue is
+     * full (D2), or null when refused: not in loaded history, not Failed, not an own private text
+     * message, failed because the recipient changed, a blocked peer, a Nostr/geohash alias
+     * conversation (its Failed stays), or a panic wipe in progress.
+     *
+     * A Failed message whose row is still in the outbox (the transport marked it Failed, e.g. an
+     * encryption error, while the row awaited D3) is retryable: the stale row is replaced.
+     *
+     * Known gap (Decision 015 amendment, accepted): if the peer is unreachable right after the
+     * first send, the SENT row expires silently at 1 h, the message keeps "Sent" and no Retry is
+     * offered.
+     */
+    fun retry(messageID: String): RouteResult? {
+        if (admissionPaused) {
+            Log.w(TAG, "Retry rejected during panic wipe")
+            return null
+        }
+        val myPeerID = (try { mesh.myPeerID } catch (_: Exception) { null }) ?: return null
+        // Peer and identity reads happen before the monitor is taken.
+        val conversationKey = AppStateStore.privateMessages.value.entries
+            .firstOrNull { (_, list) -> list.any { it.id == messageID } }
+            ?.key
+            ?: return null
+        if (com.bitchat.android.nostr.GeohashAliasRegistry.contains(conversationKey) ||
+            ContactIdentityResolver.isNostrAlias(conversationKey)
+        ) return null
+        val resolution = ContactDirectory.resolve(conversationKey)
+        val conversationID = resolution.conversationID
+        if (ContactIdentityResolver.isNostrAlias(conversationID)) return null
+        val meshTarget = resolution.meshPeerID
+        val sessionFingerprint = meshTarget?.let { authenticatedFingerprint(it) }
+        val contactFingerprint = ContactIdentityResolver.fingerprintFromContactConversationId(conversationID)
+        val announcedFingerprint = currentFingerprint(resolution, meshTarget)
+        val hasMesh = meshTarget?.let { isConnected(mesh, it) } == true
+        val knownNickname = try { mesh.getPeerNicknames()[conversationKey] } catch (_: Exception) { null }
+
+        val accepted = synchronized(this) {
+            // History lookup and the delete/ACK-memory reset in one step (retry vs delete race).
+            val message = AppStateStore.privateMessages.value[conversationKey]?.firstOrNull { it.id == messageID }
+                ?: return null
+            val status = message.deliveryStatus
+            if (status !is DeliveryStatus.Failed ||
+                status.reason == REASON_RECIPIENT_CHANGED ||
+                !message.isPrivate ||
+                message.type != com.bitchat.android.model.BitchatMessageType.Message ||
+                message.senderPeerID != myPeerID
+            ) return null
+            val expected = (durableRows[messageID]?.recipientFingerprint ?: lastFingerprints[messageID])
+                ?: contactFingerprint
+                ?: sessionFingerprint
+            if (isBlocked(expected, sessionFingerprint, announcedFingerprint, contactFingerprint)) {
+                Log.w(TAG, "Retry refused for a blocked peer msg_id=${Redact.id(messageID)}")
+                return null
+            }
+            // Replace a stale row or queue entry left behind by a transport-side Failed.
+            removeFromQueueLocked(messageID)
+            if (durableRows.containsKey(messageID)) dropDurableLocked(messageID)
+            removedIds.remove(messageID)
+            recentlyAcked.remove(messageID)
+            val nickname = message.recipientNickname ?: knownNickname ?: conversationKey
+            val entry = QueuedMessage(message.content, nickname, messageID, clock(), expected?.lowercase())
+            enqueue(conversationID, entry, persistable = true)
+        }
+        if (!accepted) {
+            statusSink(messageID, DeliveryStatus.Failed(REASON_QUEUE_FULL))
+            return RouteResult.FAILED
+        }
+        Log.d(TAG, "Retrying msg_id=${Redact.id(messageID)}")
+        statusSink(messageID, DeliveryStatus.Sending)
+        flushOutboxFor(conversationID)
+        if (hasMesh && meshTarget != null) {
+            synchronized(this) {
+                if (isQueuedLocked(messageID)) kickHandshake(conversationID, meshTarget, immediate = true)
+            }
+            dispatchEffects()
+        }
+        return RouteResult.QUEUED
     }
 
     /**
@@ -982,7 +1404,7 @@ class MessageRouter internal constructor(
     fun onPeersUpdated(peers: List<String>) {
         peers.forEach { pid ->
             kickHandshakeIfPending(pid)
-            flushOutboxFor(pid)
+            flushOutboxFor(pid) // also drains the kicked handshake
             val noiseHex = try {
                 mesh.getPeerInfo(pid)?.noisePublicKey?.let { ContactIdentityResolver.noiseKeyHex(it) }
             } catch (_: Exception) { null }
@@ -1004,6 +1426,16 @@ class MessageRouter internal constructor(
             resetRetry(it)
             flushOutboxFor(it)
         }
+    }
+
+    /** Starts the handshakes collected by [kickHandshake]; never under the monitor. */
+    private fun drainHandshakes() {
+        val targets = synchronized(this) {
+            if (pendingHandshakes.isEmpty()) return
+            ArrayList(pendingHandshakes).also { pendingHandshakes.clear() }
+        }
+        val service = mesh
+        targets.forEach { target -> try { service.initiateNoiseHandshake(target) } catch (_: Exception) { } }
     }
 
     /** Reset handshake backoff for a conversation whose session just came up. */

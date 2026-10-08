@@ -14,6 +14,41 @@ interface MeshService {
 
     fun sendMessage(content: String, mentions: List<String> = emptyList(), channel: String? = null)
     fun sendPrivateMessage(content: String, recipientPeerID: String, recipientNickname: String, messageID: String? = null)
+
+    /**
+     * MeshUp P2-PR9 (R-1 session race): like [sendPrivateMessage], but reports the transport
+     * outcome so the delivery engine only treats a message as transmitted when it really was.
+     * Same packet and wire format as [sendPrivateMessage].
+     *
+     * [onResult] is invoked exactly once, possibly on another thread and possibly before this call
+     * returns, never while holding a transport or Noise lock:
+     * - `false`: nothing was sent because no Noise session with [recipientPeerID] is established.
+     *   No handshake is started by this call; the caller decides (it owns the retry backoff).
+     * - `true`: the message was handed to the transport (or it failed terminally there, e.g. a
+     *   signing error, which the transport reports through the delivery status itself).
+     *
+     * The default keeps the legacy behaviour behind a lock-free session pre-check. It is
+     * check-then-send: a session that disappears between the check and the (asynchronous) legacy
+     * send is still reported as `true` and silently dropped, which is exactly the R-1 race. Only
+     * test doubles rely on it; every production transport (UnifiedMeshService, WifiAwareMeshService
+     * via MeshCore, BluetoothMeshService) overrides or implements the race-free variant.
+     */
+    fun sendPrivateMessageReporting(
+        content: String,
+        recipientPeerID: String,
+        recipientNickname: String,
+        messageID: String,
+        onResult: (Boolean) -> Unit
+    ) {
+        val report: (Boolean) -> Unit = { sent -> try { onResult(sent) } catch (_: Exception) { } }
+        if (!hasEstablishedSession(recipientPeerID)) {
+            report(false)
+            return
+        }
+        sendPrivateMessage(content, recipientPeerID, recipientNickname, messageID)
+        report(true)
+    }
+
     fun sendReadReceipt(messageID: String, recipientPeerID: String, readerNickname: String)
     fun sendDeliveryAck(messageID: String, recipientPeerID: String) {}
     fun sendFavoriteNotification(peerID: String, isFavorite: Boolean) {}

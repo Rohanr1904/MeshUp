@@ -358,7 +358,8 @@ fun ChatScreen(viewModel: ChatViewModel) {
                     viewerImagePaths = allImagePaths
                     initialViewerIndex = initialIndex
                     showFullScreenImageViewer = true
-                }
+                },
+                onRetryMessage = { msg -> viewModel.retryPrivateMessage(msg.id) }
             )
 
             if (showNotesStrip) {

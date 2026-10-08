@@ -66,6 +66,8 @@
     <string name="meshup_licenses_hide_gpl">Hide full GPLv3 text</string>
     <string name="meshup_licenses_third_party">Third-party software</string>
     <string name="meshup_licenses_project_desc">Open the project page for %1$s in your browser</string>
+    <string name="meshup_message_retry">Retry</string>
+    <string name="meshup_message_retry_description">Message not delivered. Retry sending</string>
     <string name="app_name">NearBird</string>
     <string name="permission_bluetooth_rationale">Bluetooth permission is required for peer-to-peer messaging without internet.</string>
     <string name="permission_location_rationale">Location permission is required to discover nearby devices via Bluetooth.</string>

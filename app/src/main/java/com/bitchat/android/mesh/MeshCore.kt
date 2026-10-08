@@ -711,14 +711,45 @@ class MeshCore(
     }
 
     fun sendPrivateMessage(content: String, recipientPeerID: String, recipientNickname: String, messageID: String? = null) {
-        if (content.isEmpty() || recipientPeerID.isEmpty()) return
+        sendPrivateMessageInternal(content, recipientPeerID, messageID, onResult = null)
+    }
+
+    /**
+     * MeshUp P2-PR9 (R-1): [sendPrivateMessage] with a transport outcome; see
+     * MeshService.sendPrivateMessageReporting. false = no established session (no handshake is
+     * started here; the caller owns the handshake backoff).
+     */
+    fun sendPrivateMessageReporting(
+        content: String,
+        recipientPeerID: String,
+        messageID: String,
+        onResult: (Boolean) -> Unit
+    ) {
+        sendPrivateMessageInternal(content, recipientPeerID, messageID, onResult)
+    }
+
+    private fun sendPrivateMessageInternal(
+        content: String,
+        recipientPeerID: String,
+        messageID: String?,
+        onResult: ((Boolean) -> Unit)?
+    ) {
+        val report: (Boolean) -> Unit = { sent -> try { onResult?.invoke(sent) } catch (_: Exception) { } }
+        if (content.isEmpty() || recipientPeerID.isEmpty()) {
+            report(true) // nothing to transmit; not a session problem
+            return
+        }
         scope.launch {
             val finalMessageID = messageID ?: java.util.UUID.randomUUID().toString()
 
             if (encryptionService.hasEstablishedSession(recipientPeerID)) {
                 try {
                     val privateMessage = PrivateMessagePacket(messageID = finalMessageID, content = content)
-                    val tlvData = privateMessage.encode() ?: return@launch
+                    val tlvData = privateMessage.encode()
+                    if (tlvData == null) {
+                        report(true)
+                        return@launch
+                    }
                     val messagePayload = NoisePayload(
                         type = NoisePayloadType.PRIVATE_MESSAGE,
                         data = tlvData
@@ -742,12 +773,19 @@ class MeshCore(
                                 com.bitchat.android.model.DeliveryStatus.Failed("Message could not be signed")
                             )
                         } catch (_: Exception) { }
+                        report(true)
                         return@launch
                     }
                     dispatchGlobal(RoutedPacket(signedPacket))
+                    report(true)
                 } catch (e: Exception) {
                     Log.e("MeshCore", "Failed to encrypt private message: ${e.message}")
+                    // Session lost between the check and the encryption (R-1): nothing was sent.
+                    report(!(onResult != null && !encryptionService.hasEstablishedSession(recipientPeerID)))
                 }
+            } else if (onResult != null) {
+                // MeshUp R-1: nothing was sent; the caller re-queues and drives the handshake.
+                report(false)
             } else {
                 initiateNoiseHandshake(recipientPeerID)
             }
