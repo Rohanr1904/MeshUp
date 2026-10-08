@@ -1,7 +1,7 @@
 # AI Status
 
 ## Current Phase
-**Phase 2: Reliability + engine hardening.** The core work is merged to `main`; P2-PR9 is in review. Launch preparation for **NearBird** has started (Decision 016).
+**Phase 2 core is COMPLETE** (all planned items merged; P2-PR11 deferred per Decision 016). **Launch preparation for NearBird** is done on the engineering side; the remaining launch gates need the owner (below).
 
 - **App:** **NearBird**, `io.github.rohanr1904.nearbird`, distributed via GitHub Releases plus a website (no Play Store).
 - **Working copy:** `C:\dev\MeshUp`. A second worktree, `C:\dev\MeshUp-ops`, is used for merges and parallel branches. The OneDrive copy is stale.
@@ -23,12 +23,25 @@
 | #15 | P2-PR10 platform compliance; no background location on API 31+ (R-9) |
 | #16 | NearBird identity (R-10); APK trust = pinned cert or own signer |
 | #17 | P2-PR8 durable router, rehydrate, process-level owner (R-1); TD-01 flipped |
+| #18 | AI status/handoff refresh; Decision 015 amendment 2 (Failed at ~7.5 min) |
+| #19 | P2-PR9 ACK-timeout resend (D3), Failed + Retry (D5), session-race fix, lock-order fix |
+| #20 | Open-source licences screen (GPLv3 text bundled, 21 grouped third-party entries) |
+| #21 | Version restarts at 1.0.0 (phone versionCode 1, Wear 1_000_000_001) |
+| #22 | Device test plan: `docs/release/NEARBIRD_DEVICE_TEST_PLAN.md` |
 
 All three characterization `knownDefect_*` families are now inverted and green: R1 replay, R-5.3 TTL and TD-01 outbox loss.
 
 ## In Progress
-- **P2-PR9** (branch `phase2/pr9-resend-retry`): ACK-timeout resend (D3), Failed + Retry (D5), and the session-race fix. Security and mesh reviews are running.
-  - Timing: with no ACK, the message becomes `Failed("No delivery confirmation")` at **about 7.5 min**. That is four resends at +30 s / +1 m / +2 m / +2 m, then one final 2 m wait for an ACK. A late ACK still upgrades the status to Delivered.
+- Nothing. The release dry run passed: CI's unsigned release is `io.github.rohanr1904.nearbird`, labelled NearBird, min API 26 / target 37, `nearbird-*` artefacts, checksums verify, Arti bundled, debug log strings stripped.
+- P2-PR9 review follow-ups (non-blocking):
+  - Retry in a plain-peer-ID chat with no stored fingerprint binds to the currently authenticated peer. Proper fix: store the recipient fingerprint in history.
+  - Verify the expected fingerprint inside the transport, to close the residual session-swap window.
+  - Delete-vs-retry is narrowed, not closed: the history delete doesn't take the router lock.
+  - Known product gap: a peer unreachable right after the first send means a silent 1 h expiry; the message keeps "Sent" and shows no Retry.
+- Licences screen (#20) needs legal review:
+  - Nordic/NanoHTTPD/JSR-305 licences came from project knowledge.
+  - Natural Earth and NewHope "public domain" comes from in-repo comments.
+  - Arti's ~500 Rust crates are summarised in one entry.
 
 ## Launch gates (Decision 016)
 1. **Physical devices (2–3 phones):**
@@ -79,14 +92,13 @@ All three characterization `knownDefect_*` families are now inverted and green: 
 - Physical devices: **not run** (launch gate).
 
 ## Next Action
-1. Address the P2-PR9 review findings, then PR, CI and merge.
-2. Owner:
-   - create the signing key
+1. Owner:
+   - create the signing key and send its certificate SHA-256 (not the password); engineering pins it in `gradle.properties`
    - confirm GPLv3 / legal
-   - schedule a device test session
-3. Then, depending on whether password rooms are wanted in v1:
-   - if yes: Phase 3 planning (rooms)
-   - if no: a release-pipeline dry run and a licences screen
+   - run the device test session using `docs/release/NEARBIRD_DEVICE_TEST_PLAN.md`
+   - approve publishing v1.0.0 to GitHub Releases (irreversible)
+2. Engineering, once the owner's inputs arrive: pin the certificate, sign and publish v1.0.0 (after approval), and fix any device-test failures.
+3. Phase 3 (password rooms) before launch only if password rooms are wanted in v1; otherwise after launch, together with the deferred follow-ups.
 
 ## Last Updated
 2026-10-08
