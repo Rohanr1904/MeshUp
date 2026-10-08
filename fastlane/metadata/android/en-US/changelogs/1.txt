@@ -1,0 +1,6 @@
+NearBird 1.0.0: first release.
+- Offline Bluetooth mesh messaging, no account or phone number
+- End-to-end encrypted private chats (Noise protocol)
+- Internet features are off by default and opt-in
+- Encrypted on-device message storage and delivery retry
+- Based on bitchat for Android (GPLv3)

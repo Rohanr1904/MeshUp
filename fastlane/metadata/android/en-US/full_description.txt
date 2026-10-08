@@ -1,1 +1,20 @@
-A secure, decentralized, peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers - just pure encrypted communication.
+NearBird is an offline-first messenger. Phones near each other exchange messages over a Bluetooth mesh, with no account, no phone number, no email and no NearBird servers.
+
+<b>Features</b>
+- Offline Bluetooth mesh: messages hop between nearby phones, so people out of direct range can still be reached through others.
+- End-to-end encrypted private chats using the Noise protocol.
+- No sign-up: you pick a display name and that is all.
+- Delivery retry: unsent private messages are kept encrypted on your device and retried for a limited time; failed messages can be retried by hand.
+- Encrypted on-device conversation storage.
+- Emergency wipe to clear your data quickly.
+
+<b>Internet features are off by default</b>
+Mesh messaging works with no Internet connection. Optional Internet features, such as location channels, stay off until you turn them on in Settings.
+
+<b>Privacy</b>
+The developers receive no data from the app. There are no analytics and no ads. See the privacy policy in the source repository for details, including a note about the Google ML Kit QR scanner.
+
+<b>Open source</b>
+NearBird is free software under the GNU General Public License v3.0. It is based on bitchat for Android by permissionlesstech and is wire-compatible with BitChat clients. The source code is at https://github.com/Rohanr1904/MeshUp
+
+Bluetooth range is limited and message delivery is not guaranteed. NearBird is for adults aged 18 and over.

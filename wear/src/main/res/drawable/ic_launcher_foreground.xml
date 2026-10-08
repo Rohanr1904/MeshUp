@@ -4,22 +4,26 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!--
-      Radar bubble: a chat bubble broadcasting to peers in range. Both rings
-      open toward the bubble's tail (bottom-right, like BitChatIcon). Everything
-      stays inside the 66dp safe zone so Wear's circular mask never clips it.
-    -->
+    <!-- NearBird mark: a small bird with "nearby" arcs. Content stays inside the 66dp safe zone. -->
     <path
-        android:pathData="M62.186,80.777A28,28 0,1 1,80.777 62.186"
-        android:strokeColor="#FF1E8A31"
-        android:strokeWidth="4"
+        android:fillColor="#FFC857"
+        android:pathData="M37,65.5A15,10 0 1 0 67,65.5A15,10 0 1 0 37,65.5ZM55,53.5A8,8 0 1 0 71,53.5A8,8 0 1 0 55,53.5ZM70,49.5L80,54.5L70,58.5ZM40,61.5L24,55.5L28,66.5L24,74.5L41,70.5Z" />
+    <path
+        android:pathData="M50,74.5L48,81.5M56,75.5L56,81.5"
+        android:strokeColor="#FFC857"
+        android:strokeWidth="2.5"
         android:strokeLineCap="round" />
     <path
-        android:pathData="M56.972,72.766A19,19 0,1 1,72.766 56.972"
-        android:strokeColor="#FF32D74B"
-        android:strokeWidth="4"
+        android:pathData="M64.74,33.58A20,20 0 0 1 79.38,42.03M65.35,26.6A27,27 0 0 1 85.12,38.01"
+        android:strokeColor="#FFC857"
+        android:strokeWidth="3"
         android:strokeLineCap="round" />
     <path
-        android:fillColor="#FF32D74B"
-        android:pathData="M49,44H59A5,5 0,0 1,64 49V54.5A5,5 0,0 1,59 59.5H49A5,5 0,0 1,44 54.5V49A5,5 0,0 1,49 44ZM61.5,57L65.5,65.5L54,59.5Z" />
+        android:fillColor="#10283C"
+        android:pathData="M63.2,51.5A1.8,1.8 0 1 0 66.8,51.5A1.8,1.8 0 1 0 63.2,51.5Z" />
+    <path
+        android:pathData="M44,65.5Q52,73.5 62,64.5"
+        android:strokeColor="#10283C"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round" />
 </vector>
