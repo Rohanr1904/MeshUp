@@ -44,6 +44,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,6 +100,15 @@ fun MeshUpApp(
     }
 
     val navController = rememberNavController()
+    var showLicences by rememberSaveable { mutableStateOf(false) }
+    if (showLicences) {
+        LicensesScreen(
+            onBack = { showLicences = false },
+            modifier = modifier.background(MaterialTheme.colorScheme.background).windowInsetsPadding(WindowInsets.statusBars)
+        )
+        return
+    }
+
     val tab = shell.tab
 
     Scaffold(
@@ -145,7 +155,7 @@ fun MeshUpApp(
                 }
             }
             composable(MeshUpTab.PROFILE.route) {
-                Box(Modifier.windowInsetsPadding(WindowInsets.statusBars)) { ProfileScreen(profile) }
+                Box(Modifier.windowInsetsPadding(WindowInsets.statusBars)) { ProfileScreen(profile) { showLicences = true } }
             }
         }
 
