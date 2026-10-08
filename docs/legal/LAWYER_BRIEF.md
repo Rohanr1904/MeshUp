@@ -26,7 +26,7 @@
 ## What we would like back
 A short written opinion on 1-6, any changes to the drafts in `docs/legal/proposals/`, and a **fixed-fee quote**; tell us if 2-3 are better handled by a CA. **Suggested routes:** **SFLC.in** (public address mail@sflc.in; an Indian free-software legal society, ask whether they take an individual developer's questions) for 1 and 5; an IP lawyer for 6; a practising **Chartered Accountant found via ICAI CA Connect** (ask for FCRA and foreign-inward-remittance experience) for 2-3. These are options, not endorsements; no one has been contacted.
 
-Contact: **[CONTACT EMAIL]**
+Contact: **nearbirdapp@proton.me**
 
 ---
 Prepared for review by a qualified lawyer; not legal advice.

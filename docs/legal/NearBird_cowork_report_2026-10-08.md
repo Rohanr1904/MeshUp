@@ -111,7 +111,7 @@ Links: [USPTO search](https://tmsearch.uspto.gov/) · [WIPO fuzzy "nearbird"](ht
 >
 > Kind regards,
 > Rohan
-> [CONTACT EMAIL]
+> nearbirdapp@proton.me
 
 ---
 

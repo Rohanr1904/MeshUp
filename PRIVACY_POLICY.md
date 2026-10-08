@@ -1,4 +1,4 @@
-> **DRAFT — not yet published.** It will be published at https://rohanr1904.github.io/nearbird/ after legal review. The contact mailbox is not yet created. Prepared for review by a qualified lawyer; not legal advice.
+> **DRAFT — not yet published.** It will be published at https://rohanr1904.github.io/nearbird/ after legal review. Prepared for review by a qualified lawyer; not legal advice.
 
 # NearBird Privacy Policy
 
@@ -104,6 +104,6 @@ If this policy changes, the "Last updated" date will change and the new policy w
 
 NearBird maintainers
 
-Contact: [CONTACT EMAIL]
+Contact: nearbirdapp@proton.me
 
-Grievance / privacy contact: [CONTACT EMAIL]
+Grievance / privacy contact: nearbirdapp@proton.me
