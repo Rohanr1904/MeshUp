@@ -10,7 +10,7 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class AndroidGeocoderProvider(context: Context) : GeocoderProvider {
+internal class AndroidGeocoderProvider(context: Context) : GeocoderProvider {
     private val geocoder = Geocoder(context, Locale.getDefault())
     private val TAG = "AndroidGeocoderProvider"
 
