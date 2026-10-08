@@ -38,9 +38,14 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
 
       - name: Verify workflow provenance ref
         run: |
+          if [ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ]; then
+            echo "error: run the workflow from the $RELEASE_TAG tag ref, not $GITHUB_REF" >&2
+            exit 1
+          fi
           checked_out_commit="$(git rev-parse HEAD)"
           if [ "$checked_out_commit" != "$GITHUB_SHA" ]; then
             echo "error: run the workflow from the $RELEASE_TAG tag ref so provenance identifies the built commit" >&2
@@ -77,6 +82,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
 
       - name: Download replica A
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -97,9 +103,9 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/attestation-subjects"
           cp "$RUNNER_TEMP/release-a/BUILDINFO.json" \
-            "$RUNNER_TEMP/attestation-subjects/BITCHAT_BUILDINFO.json"
+            "$RUNNER_TEMP/attestation-subjects/NEARBIRD_BUILDINFO.json"
           cp "$RUNNER_TEMP/release-a/SHA256SUMS.unsigned" \
-            "$RUNNER_TEMP/attestation-subjects/BITCHAT_SHA256SUMS.unsigned"
+            "$RUNNER_TEMP/attestation-subjects/NEARBIRD_SHA256SUMS.unsigned"
           cp "$RUNNER_TEMP"/release-a/nearbird-*-unsigned.apk \
             "$RUNNER_TEMP/attestation-subjects/"
           cp "$RUNNER_TEMP"/release-a/nearbird-*-unsigned.aab \
@@ -115,5 +121,54 @@ jobs:
         with:
           name: verified-unsigned-release
           path: ${{ runner.temp }}/release-a/*
+          retention-days: 30
+          if-no-files-found: error
+
+  source-archive:
+    name: Source archive (GPLv3 section 6(d))
+    runs-on: ubuntu-24.04
+    needs: compare
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Verify release tag and provenance ref
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "error: release tag must look like vX.Y.Z" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ] || [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "error: run the workflow from the $RELEASE_TAG tag ref" >&2
+            exit 1
+          fi
+
+      - name: Create deterministic source archive
+        run: |
+          mkdir "$RUNNER_TEMP/source"
+          name="nearbird-${RELEASE_TAG}-source"
+          git archive --format=tar --prefix="${name}/" HEAD \
+            | gzip -n -9 > "$RUNNER_TEMP/source/${name}.tar.gz"
+          (cd "$RUNNER_TEMP/source" && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256")
+          cat "$RUNNER_TEMP/source/${name}.tar.gz.sha256"
+
+      - name: Attest source archive
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ runner.temp }}/source/*.tar.gz
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-source
+          path: ${{ runner.temp }}/source/*
           retention-days: 30
           if-no-files-found: error
