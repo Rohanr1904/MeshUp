@@ -1,0 +1,19 @@
+# DRAFT — do not move to .github/ until the owner confirms the CA/lawyer review (LEGAL_RESEARCH §5 Q1–2)
+#
+# Why this is a draft: GitHub shows a "Sponsor" button on the repository as soon as a
+# FUNDING.yml reaches the default branch. Decision 017 says no donation link goes live
+# before the CA/lawyer review of FCRA, income tax and GST (docs/legal/DONATIONS.md).
+#
+# Do NOT place this file at .github/FUNDING.yml, and do not merge it to main, until then.
+# The GitHub Sponsors profile itself must also be approved by GitHub (owner action, not
+# done by this agent) before the button does anything.
+#
+# Format reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+# (syntax checked 2026-10-08; the file is read from .github/FUNDING.yml on the default branch)
+
+github: [Rohanr1904]
+
+# Other platforms: leave commented out. Each needs its own review (docs/legal/DONATIONS.md).
+# liberapay: Rohanr1904      # India is only "partly available", PayPal only (see DONATIONS.md)
+# open_collective: nearbird  # needs a fiscal host; Open Source Collective requires an organisation repo
+# custom: ["[GitHub Sponsors link — enabled after review]"]
