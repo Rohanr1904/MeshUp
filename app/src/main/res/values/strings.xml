@@ -55,6 +55,17 @@
     <string name="meshup_settings_battery_title">Battery</string>
     <string name="meshup_settings_battery_optimization">Battery optimization settings</string>
     <string name="meshup_settings_power_saver">Power saver settings</string>
+    <string name="meshup_settings_licenses">Open-source licences</string>
+    <string name="meshup_licenses_title">Open-source licences</string>
+    <string name="meshup_licenses_back">Back</string>
+    <string name="meshup_licenses_app_license">NearBird is free software licensed under the GNU General Public License v3.0.</string>
+    <string name="meshup_licenses_based_on">Based on bitchat for Android by permissionlesstech (GPLv3).</string>
+    <string name="meshup_licenses_source_link">Source code: %1$s</string>
+    <string name="meshup_licenses_source_desc">Open the NearBird source code in your browser</string>
+    <string name="meshup_licenses_show_gpl">Show full GPLv3 text</string>
+    <string name="meshup_licenses_hide_gpl">Hide full GPLv3 text</string>
+    <string name="meshup_licenses_third_party">Third-party software</string>
+    <string name="meshup_licenses_project_desc">Open the project page for %1$s in your browser</string>
     <string name="meshup_message_retry">Retry</string>
     <string name="meshup_message_retry_description">Message not delivered. Retry sending</string>
     <string name="app_name">NearBird</string>
