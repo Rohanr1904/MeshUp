@@ -30,8 +30,8 @@ android {
         applicationId = "io.github.rohanr1904.nearbird"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 39
-        versionName = "2.0.2"
+        versionCode = 1
+        versionName = "1.0.0"
         buildConfigField(
             "String",
             "GITHUB_RELEASE_CERT_SHA256",
