@@ -555,6 +555,15 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * MeshUp P2-PR9 (Decision 015 D5): Retry action on a Failed private text message. The router
+     * re-sends it with the same message ID or refuses (blocked peer, Nostr alias, panic, ...).
+     */
+    fun retryPrivateMessage(messageID: String) {
+        val router = com.bitchat.android.services.MessageRouter.getInstance(getApplication(), mesh)
+        viewModelScope.launch { retryPrivateMessageVia(router::retry, messageID) }
+    }
+
     fun cancelMediaSend(messageId: String) {
         // Delegate to MediaSendingManager which tracks transfer IDs and cleans up UI state
         mediaSendingManager.cancelMediaSend(messageId)
@@ -1733,3 +1742,18 @@ class ChatViewModel(
         geohashViewModel.peerIdentityForNostrPubkey(pubkeyHex)
 
 }
+
+/**
+ * MeshUp P2-PR9 (D5): the ViewModel's Retry hand-off, split out so it is unit-testable without
+ * constructing the ViewModel (it needs a live BluetoothMeshService). Never throws into the UI.
+ */
+internal fun retryPrivateMessageVia(
+    retry: (String) -> com.bitchat.android.services.MessageRouter.RouteResult?,
+    messageID: String
+): com.bitchat.android.services.MessageRouter.RouteResult? =
+    try {
+        retry(messageID)
+    } catch (e: Exception) {
+        Log.w("ChatViewModel", "Retry failed: ${e.javaClass.simpleName}")
+        null
+    }

@@ -116,6 +116,32 @@ class UnifiedMeshService(
         }
     }
 
+    /**
+     * MeshUp P2-PR9 (R-1): same transport selection as [sendPrivateMessage], but the chosen
+     * transport reports whether it had an established session. Without one the router is told so
+     * (false) and re-queues, instead of the legacy silent drop.
+     */
+    override fun sendPrivateMessageReporting(
+        content: String,
+        recipientPeerID: String,
+        recipientNickname: String,
+        messageID: String,
+        onResult: (Boolean) -> Unit
+    ) {
+        val wifi = wifiService()
+        when {
+            isBleReady(recipientPeerID) ->
+                bluetooth.sendPrivateMessageReporting(content, recipientPeerID, messageID, onResult)
+            isWifiReady(recipientPeerID) && wifi != null ->
+                wifi.sendPrivateMessageReporting(content, recipientPeerID, recipientNickname, messageID, onResult)
+            isBleConnected(recipientPeerID) || (isBleEnabled() && !isWifiConnected(recipientPeerID)) ->
+                bluetooth.sendPrivateMessageReporting(content, recipientPeerID, messageID, onResult)
+            wifi != null ->
+                wifi.sendPrivateMessageReporting(content, recipientPeerID, recipientNickname, messageID, onResult)
+            else -> onResult(false)
+        }
+    }
+
     override fun sendReadReceipt(messageID: String, recipientPeerID: String, readerNickname: String) {
         when {
             isBleReady(recipientPeerID) -> bluetooth.sendReadReceipt(messageID, recipientPeerID, readerNickname)

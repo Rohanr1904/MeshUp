@@ -1381,6 +1381,16 @@ class WifiAwareMeshService(private val context: Context) : MeshService, Transpor
         meshCore.sendPrivateMessage(content, recipientPeerID, recipientNickname, messageID)
     }
 
+    override fun sendPrivateMessageReporting(
+        content: String,
+        recipientPeerID: String,
+        recipientNickname: String,
+        messageID: String,
+        onResult: (Boolean) -> Unit
+    ) {
+        meshCore.sendPrivateMessageReporting(content, recipientPeerID, messageID, onResult)
+    }
+
     /**
      * Sends a read receipt for a specific message to the given peer over an established
      * Noise session. If no session exists, this will log an error.
