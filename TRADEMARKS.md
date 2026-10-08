@@ -41,4 +41,4 @@ NearBird is a security-sensitive messenger. People should be able to tell the ge
 
 ## Reporting misuse
 
-[NearBird contact email — dedicated mailbox, to be created]
+[CONTACT EMAIL]
