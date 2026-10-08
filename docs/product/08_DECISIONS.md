@@ -110,6 +110,7 @@ Decision:
 Consequences:
 Short expiry favours honest "Failed" states over long background waits; users retry manually (D5). Values live in `AppConstants` so they can be tuned after physical-device testing (Decision 009).
 Amendment (2026-10-08, P2-PR8 review, default per owner preference): a message already handed to the mesh (SENT, awaiting ACK) whose row passes the 1 h bound is removed from the outbox **silently and keeps its status** (it may have been delivered with the ACK lost); only QUEUED messages that were never transmitted become `Failed("Not delivered")`. QUEUED rows count toward D2; SENT rows have their own 200-per-peer cap with oldest-silent eviction.
+Amendment 2 (2026-10-08, P2-PR9, default): with no ACK, the first send plus four resends (+30 s, +1 m, +2 m, +2 m) are followed by one final 2 min wait, so `Failed("No delivery confirmation")` lands at about 7.5 min (not 5.5 min), giving the last resend time to be acknowledged. A late ACK still upgrades to Delivered; Retry (D5) resends with the same message ID.
 
 ## Decision 016 — Launch scope: defer non-blocking hardening, gate launch on devices, identity and licence
 Date: 2026-10-08 · Decided by: product owner
