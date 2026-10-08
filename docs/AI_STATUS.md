@@ -37,7 +37,7 @@ All three characterization `knownDefect_*` families are now inverted and green: 
   - Retry in a plain-peer-ID chat with no stored fingerprint binds to the currently authenticated peer. Proper fix: store the recipient fingerprint in history.
   - Verify the expected fingerprint inside the transport, to close the residual session-swap window.
   - Delete-vs-retry is narrowed, not closed: the history delete doesn't take the router lock.
-  - Known product gap: a peer unreachable right after the first send means a silent 1 h expiry; the message keeps "Sent" and shows no Retry.
+  - Closed by P2-PR12 (Decision 015 amendment 3): a SENT message unacknowledged at 1 h now becomes Failed("No delivery confirmation") with Retry, instead of silently keeping "Sent". Still silent: the 200-per-peer SENT cap eviction.
 - Licences screen (#20) needs legal review:
   - Nordic/NanoHTTPD/JSR-305 licences came from project knowledge.
   - Natural Earth and NewHope "public domain" comes from in-repo comments.

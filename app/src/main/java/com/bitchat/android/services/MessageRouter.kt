@@ -33,8 +33,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   thread never waits on I/O. Each job carries the [generation] it was submitted under and is
  *   skipped once panic ([clearAllAndAwait]) has advanced it. Status updates ([statusSink] ->
  *   AppStateStore) are always issued outside the monitor (AppStateStore calls back on ACKs).
- * - MESH: row persisted as SENT; removed by a matching DELIVERED/READ ACK, or silently (status
- *   kept) after OUTBOX_EXPIRY_MS from creation, or by the per-peer SENT cap (oldest first).
+ * - MESH: row persisted as SENT; removed by a matching DELIVERED/READ ACK, as
+ *   Failed("No delivery confirmation") after OUTBOX_EXPIRY_MS from creation (amendment 3), or
+ *   silently (status kept) by the per-peer SENT cap (oldest first).
  * - QUEUED: row persisted as QUEUED; expires to Failed after OUTBOX_EXPIRY_MS from creation (D1).
  * - NOSTR routes and Nostr-alias conversations are never persisted (D4); a queued row that is
  *   flushed via Nostr is removed.
@@ -59,18 +60,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   is removed. A due resend is only made when the peer is ready, unblocked and its authenticated
  *   identity still matches; an unreachable peer consumes no attempt (the row waits for the next
  *   tick on which it is ready).
- * - D3 vs the 1 h amendment: expiry is checked first on every tick. A SENT row older than
- *   OUTBOX_EXPIRY_MS is dropped silently and keeps its status, even when attempts remain (e.g. a
- *   restored row, or a peer that stayed unreachable). The explicit D3 Failed only happens for a
- *   row that used up its schedule inside the hour, which is the normal case (about 7.5 min).
+ * - D3 vs the 1 h bound: expiry is checked first on every tick. A SENT row older than
+ *   OUTBOX_EXPIRY_MS is removed and becomes Failed("No delivery confirmation"), even when attempts
+ *   remain (e.g. a restored row, or a peer that stayed unreachable), so Retry (D5) is offered
+ *   (Decision 015 amendment 3; it replaced the silent drop). The D3 Failed for a row that used
+ *   up its schedule inside the hour remains the normal case (about 7.5 min).
  * - D5 [retry]: a Failed own private text message still in history is queued again with the
  *   same ID and its expected recipient identity, then flushed (limits, identity and block checks
  *   apply). A retry restarts both the 1 h bound and the D3 schedule. Refused after "Recipient
  *   changed", for blocked peers, Nostr/geohash aliases (they keep their own path) and while a
  *   panic wipe is in progress.
  * - Status: a first mesh transmission the transport accepted moves Sending to Sent (monotonic).
- * - Known gap (amendment, accepted by default): if the peer is unreachable right after the first
- *   send, the SENT row expires silently at 1 h, the message keeps "Sent" and no Retry is shown.
  * - Lock order: no transport/Noise operation (send, handshake) runs under this monitor; they are
  *   collected and drained after release. Read-only peer lookups (getPeerInfo,
  *   hasEstablishedSession, getPeerFingerprint) are lock-free map reads in the transports.
@@ -101,7 +101,7 @@ class MessageRouter internal constructor(
         val enqueuedAtMs: Long,
         /** Identity the message was addressed to; a resend is refused if it changes. */
         val recipientFingerprint: String? = null,
-        /** Restored from a SENT row: expiry drops it silently instead of failing it. */
+        /** Restored from a SENT row: expiry fails it as "No delivery confirmation" (amendment 3). */
         val sentBefore: Boolean = false
     )
 
@@ -858,15 +858,21 @@ class MessageRouter internal constructor(
                 }
                 // Already handled in this process (queued or sent since start).
                 if (durableRows.containsKey(id) || isQueuedLocked(id)) continue
-                // D1 amendment: an expired SENT row is dropped silently; its status is kept.
-                if (row.state == OutboxState.SENT && now - row.createdAt > OUTBOX_EXPIRY_MS) {
-                    toRemove += id
-                    continue
-                }
                 if (isBlocked(row.recipientFingerprint, ContactIdentityResolver.fingerprintFromContactConversationId(conversationKey))) {
                     toRemove += id
                     rememberRemovedLocked(id)
                     failed[id] = REASON_BLOCKED
+                    continue
+                }
+                // Amendment 3: an expired SENT row is removed and fails, so Retry is offered.
+                if (row.state == OutboxState.SENT && now - row.createdAt > OUTBOX_EXPIRY_MS) {
+                    toRemove += id
+                    failed[id] = REASON_NO_CONFIRMATION
+                    // Keep the identity it was bound to, so a D5 retry is checked against it.
+                    row.recipientFingerprint?.let { fingerprint ->
+                        lastFingerprints[id] = fingerprint
+                        if (lastFingerprints.size > ID_MEMORY_CAP) lastFingerprints.remove(lastFingerprints.keys.first())
+                    }
                     continue
                 }
                 if (!conversationID.equals(row.conversationId, ignoreCase = true)) reKeyed += id to conversationID
@@ -991,7 +997,7 @@ class MessageRouter internal constructor(
     }
 
     private fun tickLocked(nowMs: Long) {
-        // Order matters: the silent 1 h drop (amendment) wins over a D3 resend or Failed.
+        // Order matters: the 1 h bound (amendment 3) wins over a D3 resend.
         expireSentRowsLocked(nowMs)
         resendDueLocked(nowMs)
         outbox.keys.toList().forEach { conversationID ->
@@ -1017,13 +1023,17 @@ class MessageRouter internal constructor(
         }
     }
 
-    /** D1 amendment: SENT rows awaiting an ACK are dropped silently 1 h after creation. */
+    /** Amendment 3: SENT rows still awaiting an ACK 1 h after creation are removed and fail. */
     private fun expireSentRowsLocked(nowMs: Long) {
         durableRows.entries
             .filter { it.value.state == OutboxState.SENT && nowMs - it.value.createdAt > OUTBOX_EXPIRY_MS }
             .map { it.key }
             .filterNot { isQueuedLocked(it) } // rehydrated SENT entries expire via the queue below
-            .forEach { dropDurableLocked(it) }
+            .forEach { id ->
+                Log.w(TAG, "No delivery confirmation within 1 h msg_id=${Redact.id(id)}")
+                dropDurableLocked(id)
+                pendingEffects += Effect.Status(id, DeliveryStatus.Failed(REASON_NO_CONFIRMATION))
+            }
     }
 
     /**
@@ -1242,11 +1252,7 @@ class MessageRouter internal constructor(
      *
      * A Failed message whose row is still in the outbox (the transport marked it Failed, e.g. an
      * encryption error, while the row awaited D3) is retryable: the stale row is replaced.
-     *
-     * Known gap (Decision 015 amendment, accepted): if the peer is unreachable right after the
-     * first send, the SENT row expires silently at 1 h, the message keeps "Sent" and no Retry is
-     * offered.
-     */
+     *     */
     fun retry(messageID: String): RouteResult? {
         if (admissionPaused) {
             Log.w(TAG, "Retry rejected during panic wipe")
@@ -1315,8 +1321,9 @@ class MessageRouter internal constructor(
     }
 
     /**
-     * D1: queued messages older than OUTBOX_EXPIRY_MS (from creation) become Failed. Entries
-     * restored from SENT rows were already handed to a transport, so they are dropped silently.
+     * D1: queued messages older than OUTBOX_EXPIRY_MS (from creation) become Failed("Not
+     * delivered"). Entries restored from SENT rows were already handed to a transport, so they
+     * become Failed("No delivery confirmation") instead (amendment 3).
      */
     private fun expireOldEntriesLocked(conversationID: String, nowMs: Long) {
         val queued = outbox[conversationID] ?: return
@@ -1330,6 +1337,9 @@ class MessageRouter internal constructor(
                 if (!entry.sentBefore) {
                     pendingEffects += Effect.Status(entry.messageID, DeliveryStatus.Failed(REASON_NOT_DELIVERED))
                     pendingEffects += Effect.Expired(entry.messageID)
+                } else {
+                    // Restored SENT entry (amendment 3): transmitted before, never acknowledged.
+                    pendingEffects += Effect.Status(entry.messageID, DeliveryStatus.Failed(REASON_NO_CONFIRMATION))
                 }
             }
         }

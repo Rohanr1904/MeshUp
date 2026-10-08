@@ -102,6 +102,9 @@ class MessageRouterDurableOutboxTest {
     private fun failedReason(id: String): String? =
         statuses.lastOrNull { it.first == id }?.second?.let { (it as? DeliveryStatus.Failed)?.reason }
 
+    private fun failedCount(id: String): Int =
+        statuses.count { it.first == id && it.second is DeliveryStatus.Failed }
+
     @Test
     fun `mesh send persists a SENT row and a delivered ACK removes it`() {
         peerReady()
@@ -483,45 +486,62 @@ class MessageRouterDurableOutboxTest {
     }
 
     @Test
-    fun `expired SENT row is removed in-process without a status change`() {
+    fun `expired SENT row is removed in-process and fails with no delivery confirmation`() {
         peerReady()
         val router = newRouter()
         router.sendPrivate("hi", peerID, "peer", "m1")
         await(router)
-        statuses.clear() // P2-PR9: a first transmit sets Sent; the expiry itself must add nothing
+        statuses.clear() // P2-PR9: a first transmit sets Sent
+        peerOffline() // unreachable after the first send: no resend consumes the D3 schedule
         fakeTime += AppConstants.Router.OUTBOX_EXPIRY_MS + 1
         router.tickOutbox()
         await(router)
         assertTrue(store.rows.isEmpty())
-        assertTrue(statuses.isEmpty())
+        assertEquals(MessageRouter.REASON_NO_CONFIRMATION, failedReason("m1"))
+        assertEquals(1, failedCount("m1"))
     }
 
     @Test
-    fun `expired SENT row on rehydrate is dropped, not failed or resent`() {
+    fun `expired SENT row on rehydrate fails with no delivery confirmation and is not resent`() {
         store.rows["s1"] = row("s1", state = OutboxState.SENT)
         fakeTime += AppConstants.Router.OUTBOX_EXPIRY_MS + 1
         val router = newRouter()
         router.rehydrate()
         await(router)
         assertTrue(store.rows.isEmpty())
-        assertTrue(statuses.isEmpty())
+        assertEquals(MessageRouter.REASON_NO_CONFIRMATION, failedReason("s1"))
+        assertEquals(1, failedCount("s1"))
         peerReady()
         router.onSessionEstablished(peerID)
         verify(mesh, never()).sendPrivateMessage(any(), any(), any(), anyOrNull())
     }
 
     @Test
-    fun `rehydrated SENT entry that expires before resend is dropped silently`() {
+    fun `rehydrated SENT entry that expires before resend fails with no delivery confirmation`() {
         store.rows["s1"] = row("s1", state = OutboxState.SENT)
         val router = newRouter()
         router.rehydrate()
         await(router)
-        statuses.clear() // P2-PR9: a first transmit sets Sent; the expiry itself must add nothing
+        statuses.clear()
         fakeTime += AppConstants.Router.OUTBOX_EXPIRY_MS + 1
         router.tickOutbox()
         await(router)
         assertTrue(store.rows.isEmpty())
-        assertTrue(statuses.isEmpty())
+        assertEquals(MessageRouter.REASON_NO_CONFIRMATION, failedReason("s1"))
+        assertEquals(1, failedCount("s1"))
+    }
+
+    @Test
+    fun `expired SENT row on rehydrate for a blocked peer fails as blocked, not no confirmation`() {
+        store.rows["s1"] = row("s1", recipientFingerprint = fingerprint, state = OutboxState.SENT)
+        fakeTime += AppConstants.Router.OUTBOX_EXPIRY_MS + 1
+        val router = newRouter()
+        router.isFingerprintBlocked = { it.equals(fingerprint, ignoreCase = true) }
+        router.rehydrate()
+        await(router)
+        assertTrue(store.rows.isEmpty())
+        assertEquals(MessageRouter.REASON_BLOCKED, failedReason("s1"))
+        assertEquals(1, failedCount("s1"))
     }
 
     @Test
