@@ -50,9 +50,15 @@ All three characterization `knownDefect_*` families are now inverted and green: 
    - BLE discovery with `neverForLocation` on API 31–37
    - background scanning on API 29–30
    - boot/FGS start on API 34–37
-2. **Owner signing key:** create the keystore, set `BITCHAT_GITHUB_RELEASE_CERT_SHA256` in `gradle.properties`, then sign with `tools/reproducible-builds/sign-release.sh`. The script reads `BITCHAT_GITHUB_KEYSTORE`, `..._KEY_ALIAS`, `..._KEYSTORE_PASSWORD` and `..._KEY_PASSWORD` from the environment.
-3. **GPLv3:** the owner confirms it fits the business model (legal advice if unsure) and publishes the source. Finalise the `PRIVACY_POLICY.md` placeholders (contact, URLs, minimum age) and publish it on the website.
-4. **Trademark/domain check** for "NearBird".
+2. **Owner signing key:** DONE. Created 2026-10-08 (alias `nearbird`, RSA 2048); certificate pinned in `gradle.properties` (#24). Signing runs on the owner's machine with `tools/reproducible-builds/sign-release.sh`, which reads `BITCHAT_GITHUB_KEYSTORE`, `..._KEY_ALIAS`, `..._KEYSTORE_PASSWORD` and `..._KEY_PASSWORD` from the environment.
+3. **Licence + privacy (Decision 017, legal-compliance playbooks A–D run 2026-10-08; see `docs/legal/`):**
+   - GPLv3 open source **confirmed by the owner**; donations only, no perks; donation links stay off until CA/lawyer review.
+   - Licence verification: 194 JVM artifacts + 465 Rust crates checked, **no GPL-incompatible licence found** (`docs/legal/THIRD_PARTY_LICENCES.md`). Open: JSR-305 notice, `ring` (Apache-2.0 AND ISC), MPL-2.0 `option-ext`, proprietary ML Kit / Play Services (NEEDS LAWYER; blocks F-Droid). Licences-screen corrections: `docs/legal/LICENSES_SCREEN_DIFF.md`.
+   - GPLv3 release checklist (`docs/legal/GPL_RELEASE_CHECKLIST.md`): missing §5(a) NOTICE and `TRADEMARKS.md` (proposals ready); in-app copyright/no-warranty line missing; per-release source archive proposed; **leftover bitchat branding**: launcher icon, Wear app name, hotspot page title, permission rationale text, README, `BITCHAT_*` release asset names.
+   - Privacy policy: 6 statements fail against the code (permissions list, media storage, retention limits, hotspot/Wi-Fi Aware, log-redaction wording, location/Play Services). Fixed draft: `docs/legal/proposals/PRIVACY_POLICY.filled.md` (GitHub Pages URL, repo URL, 18+, grievance line; **contact email stays a placeholder until a dedicated mailbox exists**).
+   - Remaining: **lawyer/CA review** using `docs/legal/LAWYER_BRIEF.md` (11 questions: GPL §5(a)/§6, ML Kit, public-domain code, trademark, DPDP, FCRA, income tax, GST, FEMA).
+4. **Name/domain:** web search finds no "NearBird" messenger; `nearbird.com`/`.org` are registered (since 2007); `nearbird.app` appears available (no purchase until device testing passes, Decision 017). **Owner:** trademark searches (IP India classes 9/38/42, WIPO, USPTO), via the Claude Cowork request; create a dedicated contact mailbox.
+5. **Publish v1.0.0 to GitHub Releases:** after gates 1, 3 and 4, with explicit owner approval.
 
 ## Deferred until after launch (Decision 016)
 - **P2-PR11 Arti native stop fix.** The Settings restart prompt is the mitigation: Tor guard connections persist after Internet OFF until a restart.

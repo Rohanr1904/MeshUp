@@ -3,7 +3,7 @@
 ## Hierarchy
 Chief of Engineering: Claude Opus 5.5.
 Specialists: up to 6.
-Roles: mesh-architect, android-engineer, security-engineer, qa-engineer, ux-product, research-scout.
+Roles: mesh-architect, android-engineer, security-engineer, qa-engineer, ux-product, research-scout, legal-compliance (licences, privacy policy, GPLv3 release and donation compliance; writes only under `docs/legal/`; prepares briefs for a human lawyer, never final sign-off).
 
 ## Routing
 Haiku: discovery, simple research, logs, test triage.

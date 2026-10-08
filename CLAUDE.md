@@ -43,6 +43,7 @@ Specialist agents are workers under the Chief:
 - qa-engineer
 - ux-product
 - research-scout
+- legal-compliance
 
 ## Model Selection
 
@@ -64,6 +65,7 @@ Available specialists:
 - qa-engineer
 - ux-product
 - research-scout
+- legal-compliance
 
 Assign only relevant specialists.
 Avoid duplicate investigation.

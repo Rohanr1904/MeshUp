@@ -131,3 +131,12 @@ Decision:
 Consequences:
 Deferred items stay tracked in `docs/AI_STATUS.md`. The app ID and name are permanent once published, so they need explicit owner answers before the change is made.
 
+## Decision 017 — Open source + donations; domain later
+Date: 2026-10-08 · Decided by: product owner
+Decision:
+NearBird is GPLv3 open source (confirms Decision 011): anyone may see, copy and rebuild it. It is funded by voluntary donations with no paid features or perks. No domain is bought before device testing passes; until then the privacy policy and download page live on GitHub Pages under the owner's GitHub account (`https://rohanr1904.github.io/nearbird/`). Donation platforms and their tax treatment are reviewed by a CA/lawyer before any donate link goes live.
+Consequences:
+- Donation material (`FUNDING.yml`, README "Support NearBird") stays a draft under `docs/legal/` until the owner confirms the CA/lawyer review (LEGAL_RESEARCH §5 questions 1–2). No donation link is published before then.
+- No personal contact details are published: the privacy policy keeps a contact placeholder until a dedicated NearBird mailbox exists. Commits made by Claude use the owner's GitHub no-reply address.
+- Research baseline: `docs/legal/LEGAL_RESEARCH.md`; specialist: `legal-compliance` (`.claude/agents/legal-compliance.md`).
+
