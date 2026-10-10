@@ -70,6 +70,7 @@
     <!-- Device support hint for Wi‑Fi Aware (optional) -->
     <uses-feature android:name="android.hardware.wifi.aware" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <permission
         android:name="com.bitchat.android.permission.FORCE_FINISH"
