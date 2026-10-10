@@ -57,7 +57,7 @@ Sources: the first-pass RDAP/web checks, then the cowork report `NearBird_cowork
 | Trademark: WIPO Global Brand Database | No exact NEARBIRD mark; nothing in classes 9/38/42. (CONFIRMED) |
 | Trademark: "NearBirds", EU 018348780, classes 25/28 | Same-sounding name but unrelated goods (clothing, toys/games). Low risk. (CONFIRMED record; the risk view is NEEDS LAWYER) |
 | Trademark: "GEARBIRD", India 5948768, class 9 | Possible (visual) similarity: same class, one letter apart in appearance; sounds different. Goods description not yet checked. NEEDS LAWYER to assess. |
-| Trademark: IP India ESEARCH | **OUTSTANDING (owner action).** The new portal (`tmrsearch.ipindia.gov.in/ESEARCH`) returned HTTP 503 and needs an OTP login. WIPO's database includes some Indian records, but that is no substitute. Run NEARBIRD / NEAR BIRD / NEARBYRD, phonetic + "contains", classes 9/38/42. |
+| Trademark: IP India | **DONE (index search), CONFIRMED by owner lookup.** IP India **Search Index of Registered Trade Mark/Application** (`tmrsearch.ipindia.gov.in`, run by the owner on 2026-10-10): **no record** for NEARBIRD in classes 9, 38 and 42 (Registered and Pending indexes); NEAR BIRD in class 9 (Registered and Pending); NEARBYRD in class 9 (Registered). The ESEARCH wordmark/phonetic search (`/ESEARCH`) still returned HTTP 503 on 2026-10-10, so no phonetic search was run. GEARBIRD is CONFIRMED in the IP India Registered index: 5948768, class 9, application date 23/05/2023 (matches WIPO). Its goods/services description was not viewed; NEEDS LAWYER to assess similarity. A professional clearance search (incl. phonetic) is part of lawyer question 6. |
 | `nearbird.app` | **Available** at Porkbun: about US$8.75 first year, about US$15/yr renewal (Namecheap about 11 / 18). Cloudflare price not checked (needs login). **No purchase before device testing passes (Decision 017).** (CONFIRMED) |
 | `nearbird.com` | **Parked and for sale** (Afternic / Porkbun aftermarket about US$2,999). Registered since 2007. **Do not buy.** (CONFIRMED) |
 | `nearbird.org` | **Registered since 2007**, no live site. (CONFIRMED) |
@@ -65,9 +65,9 @@ Sources: the first-pass RDAP/web checks, then the cowork report `NearBird_cowork
 
 Old registrations of the .com and .org are not a trademark conflict by themselves. A parked .com can confuse users, so `nearbird.app` (HTTPS-only by design) is the best later option.
 
-Not completed: IP India direct search; EUIPO TMview as a separate query (WIPO data already includes EU records); GEARBIRD goods description; Cloudflare Registrar price; phone-number requirements of mailbox providers.
+Not completed: IP India phonetic (ESEARCH) search (portal 503); EUIPO TMview as a separate query (WIPO data already includes EU records); GEARBIRD goods description; Cloudflare Registrar price; phone-number requirements of mailbox providers.
 
-**Overall (not legal advice):** no direct conflict found in the US or WIPO datasets for classes 9/38/42; one possible class 9 similarity (GEARBIRD) for the lawyer; the Indian register search is still open.
+**Overall (not legal advice):** no direct conflict found in the US or WIPO datasets for classes 9/38/42; one possible class 9 similarity (GEARBIRD) for the lawyer; the IP India index search (2026-10-10) found no NEARBIRD / NEAR BIRD / NEARBYRD mark in classes 9/38/42; a phonetic search is left to the lawyer.
 
 ## 5. Questions for the lawyer / CA (short brief)
 1. Does an individual developer receiving donations (GitHub Sponsors, incl. foreign donors) for a GPLv3 app fall under FCRA §11 registration ("definite programme"), or under the general individual permission?
