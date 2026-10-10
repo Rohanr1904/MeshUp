@@ -26,11 +26,9 @@ required=(
   nearbird-arm64-unsigned.apk
   nearbird-arm64.apk
   nearbird-armv7-unsigned.apk
-  nearbird-play-upload.aab
   nearbird-release-unsigned.aab
   nearbird-universal-unsigned.apk
   nearbird-universal.apk
-  nearbird-wear-play-upload.aab
   nearbird-wear-release-unsigned.aab
   nearbird-wear-unsigned.apk
   nearbird-wear.apk
@@ -38,6 +36,9 @@ required=(
   nearbird-x86_64-unsigned.apk
   nearbird-x86_64.apk
 )
+# The Play upload bundles (nearbird-play-upload.aab, nearbird-wear-play-upload.aab) are
+# optional: NearBird is distributed through GitHub Releases without a Play listing
+# (Decision 016). They are still accepted below when a Play release is prepared.
 for artifact in "${required[@]}"; do
   if [ ! -f "$RELEASE_DIR/$artifact" ]; then
     echo "error: required release artifact missing: $artifact" >&2
@@ -83,9 +84,10 @@ done
 
 mv "$RELEASE_DIR/BUILDINFO.json" "$RELEASE_DIR/NEARBIRD_BUILDINFO.json"
 mv "$RELEASE_DIR/SHA256SUMS.unsigned" "$RELEASE_DIR/NEARBIRD_SHA256SUMS.unsigned"
+# sha256sum writes "  name" (text mode) or " *name" (binary mode, e.g. Git Bash on Windows).
 sed \
-  -e 's/  BUILDINFO.json$/  NEARBIRD_BUILDINFO.json/' \
-  -e 's/  SHA256SUMS.unsigned$/  NEARBIRD_SHA256SUMS.unsigned/' \
+  -e 's/\( [ *]\)BUILDINFO.json$/\1NEARBIRD_BUILDINFO.json/' \
+  -e 's/\( [ *]\)SHA256SUMS.unsigned$/\1NEARBIRD_SHA256SUMS.unsigned/' \
   "$RELEASE_DIR/SHA256SUMS" > "$RELEASE_DIR/NEARBIRD_SHA256SUMS"
 rm "$RELEASE_DIR/SHA256SUMS"
 

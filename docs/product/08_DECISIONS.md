@@ -141,3 +141,19 @@ Consequences:
 - No personal contact details are published: the privacy policy keeps a contact placeholder until a dedicated NearBird mailbox exists. Commits made by Claude use the owner's GitHub no-reply address.
 - Research baseline: `docs/legal/LEGAL_RESEARCH.md`; specialist: `legal-compliance` (`.claude/agents/legal-compliance.md`).
 
+## Decision 018 — v1.0.0 release path (owner, 2026-10-10)
+
+- **Test first:** v1.0.0 is published only after the owner's physical-device
+  test (`docs/release/NEARBIRD_DEVICE_TEST_PLAN.md`, all MUST rows) passes.
+  No beta release.
+- **No lawyer before launch:** the lawyer review is not a launch gate. The
+  privacy policy is published with v1.0.0. Donations stay off until a CA has
+  reviewed the FCRA / income-tax / GST questions (`docs/legal/LAWYER_BRIEF.md`
+  Q2-Q3). Sending the brief to SFLC.in remains optional.
+- **Unsigned release tag:** v1 uses an annotated, unsigned git tag. APKs are
+  signed with the pinned NearBird release key (#24) and builds are attested by
+  GitHub (`docs/maintainer-release-guide.md`, "NearBird v1 release profile").
+- **GitHub-only assets:** no Play upload AABs; the release tooling accepts
+  their absence.
+- **Repository renamed** `MeshUp` -> `nearbird` (2026-10-10) so that the GitHub
+  Pages site is `https://rohanr1904.github.io/nearbird/`.
