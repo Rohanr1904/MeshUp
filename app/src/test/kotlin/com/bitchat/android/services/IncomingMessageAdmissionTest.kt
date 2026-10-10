@@ -90,6 +90,55 @@ class IncomingMessageAdmissionTest {
     }
 
     @Test
+    fun `admit tells duplicate from failure`() {
+        val message = privateMessage(id = "ack-outcome")
+        assertEquals(IncomingAdmissionResult.ADMITTED, IncomingMessageAdmission.admit(message))
+        assertEquals(IncomingAdmissionResult.DUPLICATE, IncomingMessageAdmission.admit(message))
+
+        // Stored but no longer in memory (summary-only restart): still a duplicate, so it is acked.
+        AppStateStore.clear()
+        assertEquals(IncomingAdmissionResult.DUPLICATE, IncomingMessageAdmission.admit(message))
+
+        AppStateStore.setConversationRepositoryForTest(null)
+        assertEquals(
+            IncomingAdmissionResult.REJECTED,
+            IncomingMessageAdmission.admit(privateMessage(id = "no-store"))
+        )
+
+        AppStateStore.setConversationRepositoryForTest(repository)
+        assertTrue(runBlocking { AppStateStore.panicClearPrivateConversations() })
+        assertEquals(
+            IncomingAdmissionResult.REJECTED,
+            IncomingMessageAdmission.admit(privateMessage(id = "during-wipe"))
+        )
+    }
+
+    @Test
+    fun `failed write is rejected not duplicate`() {
+        val failing = ConversationRepository(
+            context = context,
+            dispatcher = Dispatchers.Unconfined,
+            databaseName = "failing-$databaseName",
+            storageCipher = object : ConversationStorageCipher {
+                override fun encrypt(plaintext: ByteArray, associatedData: ByteArray): ByteArray =
+                    error("storage unavailable")
+
+                override fun decrypt(envelope: ByteArray, associatedData: ByteArray): ByteArray =
+                    error("storage unavailable")
+
+                override fun destroyKey() = Unit
+            }
+        )
+        repositoriesToClose += failing
+        AppStateStore.setConversationRepositoryForTest(failing)
+
+        assertEquals(
+            IncomingAdmissionResult.REJECTED,
+            IncomingMessageAdmission.admit(privateMessage(id = "write-fails"))
+        )
+    }
+
+    @Test
     fun `older retained replay is rejected after summary-only restart`() {
         val older = privateMessage(id = "older-retained")
         val latest = privateMessage(id = "latest-summary").copy(timestamp = Date(2L))

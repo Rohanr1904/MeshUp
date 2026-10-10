@@ -484,13 +484,13 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
             }
             
             // Callbacks
-            override fun onMessageReceived(message: BitchatMessage) {
+            override fun onMessageReceived(message: BitchatMessage): Boolean {
                 // Private-message admission is authoritative. In particular, do not forward a
                 // callback or notify after panic mode rejected the message while wiping state.
-                if (
-                    !com.bitchat.android.services.IncomingMessageAdmission
-                        .admitToAppState(message)
-                ) return
+                val admission = com.bitchat.android.services.IncomingMessageAdmission.admit(message)
+                if (admission != com.bitchat.android.services.IncomingAdmissionResult.ADMITTED) {
+                    return admission.acknowledgeable
+                }
 
                 // And forward to UI delegate if attached
                 delegate?.didReceiveMessage(message)
@@ -507,6 +507,7 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                         }
                     } catch (_: Exception) { }
                 }
+                return true
             }
             
             override fun onChannelLeave(channel: String, fromPeer: String) {
@@ -1669,6 +1670,9 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
      */
     fun clearAllInternalData() {
         Log.w(TAG, "Clearing all mesh service internal data")
+        // Synchronously, before the delayed stopServices() teardown: drop queued receive side
+        // effects so no file is written or delivery ACK sent for a message received pre-wipe.
+        try { messageHandler.cancelPendingReceiveSideEffects() } catch (_: Exception) { }
         try {
             // Stop services to cease broadcasting old ID immediately
             stopServices()

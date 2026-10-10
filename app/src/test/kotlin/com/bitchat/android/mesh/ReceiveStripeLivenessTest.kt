@@ -83,7 +83,7 @@ class ReceiveStripeLivenessTest {
                 admitted += "file"
             }
             events += "admit"
-            Unit
+            true
         }
         whenever(delegate.sendPacket(any())).thenAnswer { events += "ack"; Unit }
         whenever(delegate.onDeliveryAckReceived(any(), any())).thenAnswer { ackReceived.countDown(); Unit }

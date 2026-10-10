@@ -275,18 +275,28 @@ object AppStateStore {
         peerID: String,
         msg: BitchatMessage,
         forceRead: Boolean = false
-    ): Boolean {
+    ): Boolean = admitPrivateMessageDurably(peerID, msg, forceRead) == IncomingAdmissionResult.ADMITTED
+
+    /**
+     * Like [addPrivateMessageDurably], but tells a duplicate (already admitted or already stored)
+     * apart from a rejection (panic, missing store, failed write, or a concurrent copy in flight),
+     * so a transport only acknowledges delivery of a message it actually holds.
+     */
+    suspend fun admitPrivateMessageDurably(
+        peerID: String,
+        msg: BitchatMessage,
+        forceRead: Boolean = false
+    ): IncomingAdmissionResult {
         val persistence = synchronized(this) {
-            if (privateConversationWritesSuspended) return false
-            if (seenMessageIds.contains(msg.id) || !reservedPrivateMessageIds.add(msg.id)) {
-                return false
-            }
+            if (privateConversationWritesSuspended) return IncomingAdmissionResult.REJECTED
+            if (seenMessageIds.contains(msg.id)) return IncomingAdmissionResult.DUPLICATE
+            if (!reservedPrivateMessageIds.add(msg.id)) return IncomingAdmissionResult.REJECTED
             privateMessagePersistence(peerID, msg, forceRead)
         }
         val repository = persistence.repository
         if (repository == null) {
             synchronized(this) { reservedPrivateMessageIds.remove(msg.id) }
-            return false
+            return IncomingAdmissionResult.REJECTED
         }
         val persisted = repository.upsertMessageAndWait(
             conversationID = persistence.conversationID,
@@ -297,21 +307,31 @@ object AppStateStore {
         )
         return synchronized(this) {
             reservedPrivateMessageIds.remove(msg.id)
-            if (
-                !persisted ||
-                privateConversationWritesSuspended ||
-                persistence.generation != privateConversationGeneration ||
-                seenMessageIds.contains(msg.id)
-            ) {
-                return@synchronized false
+            when {
+                persisted == null ||
+                    privateConversationWritesSuspended ||
+                    persistence.generation != privateConversationGeneration ->
+                    IncomingAdmissionResult.REJECTED
+                // Already stored (e.g. an older replay after a summary-only restart) or admitted
+                // meanwhile: the message is held, so it is a duplicate.
+                !persisted || seenMessageIds.contains(msg.id) -> IncomingAdmissionResult.DUPLICATE
+                addPrivateMessageLocked(
+                    peerID = peerID,
+                    msg = msg,
+                    forceRead = forceRead,
+                    persistAsynchronously = false
+                ) -> IncomingAdmissionResult.ADMITTED
+                else -> IncomingAdmissionResult.REJECTED
             }
-            addPrivateMessageLocked(
-                peerID = peerID,
-                msg = msg,
-                forceRead = forceRead,
-                persistAsynchronously = false
-            )
         }
+    }
+
+    /**
+     * Current private-conversation generation, or null while panic has suspended private writes.
+     * Lets deferred receive work detect that a wipe happened after it was queued.
+     */
+    internal fun privateConversationGenerationOrNull(): Long? = synchronized(this) {
+        if (privateConversationWritesSuspended) null else privateConversationGeneration
     }
 
     private fun addPrivateMessageLocked(

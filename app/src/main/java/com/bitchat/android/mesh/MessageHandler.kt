@@ -46,6 +46,24 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
     // that sender's user-visible messages in arrival order; decryption stays on the stripe.
     private val receiveSideEffects = SerialLanes(handlerScope, tag = TAG)
 
+    // Bumped by a panic wipe. Queued side effects capture it (with the store's private
+    // conversation generation) and re-check it before writing a file, admitting, or acking.
+    private val receiveEpoch = java.util.concurrent.atomic.AtomicLong()
+
+    private class ReceiveTicket(val epoch: Long, val storeGeneration: Long?)
+
+    private fun receiveTicket() = ReceiveTicket(
+        receiveEpoch.get(),
+        com.bitchat.android.services.AppStateStore.privateConversationGenerationOrNull()
+    )
+
+    /** False once a wipe started after [ticket] was taken (or one was in progress then). */
+    private fun isCurrent(ticket: ReceiveTicket): Boolean =
+        ticket.storeGeneration != null &&
+            ticket.epoch == receiveEpoch.get() &&
+            com.bitchat.android.services.AppStateStore.privateConversationGenerationOrNull() ==
+            ticket.storeGeneration
+
     // Consecutive decrypt failures per peer; only signature-verified packets reach this path,
     // so repeated failures mean the established session is stale (peer re-handshaked elsewhere).
     private val consecutiveDecryptFailures = java.util.concurrent.ConcurrentHashMap<String, Int>()
@@ -100,10 +118,12 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                         // Handle favorite/unfavorite notifications embedded as PMs
                         val pmContent = privateMessage.content
                         if (FavoriteControlMessage.parse(pmContent) != null) {
+                            val ticket = receiveTicket()
                             receiveSideEffects.submit(peerID, "favorite") {
+                                if (!isCurrent(ticket)) return@submit
                                 handleFavoriteNotificationFromMesh(pmContent, peerID)
                                 // Acknowledge delivery for UX parity
-                                sendDeliveryAck(privateMessage.messageID, peerID)
+                                if (isCurrent(ticket)) sendDeliveryAck(privateMessage.messageID, peerID)
                             }
                             return true
                         }
@@ -122,12 +142,19 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                             mentions = null
                         )
                         
+                        val ticket = receiveTicket()
                         receiveSideEffects.submit(peerID, "private message") {
-                            // Notify delegate (durable admission may wait on the DB writer)
-                            delegate?.onMessageReceived(message)
+                            if (!isCurrent(ticket)) return@submit
+                            // Durable admission (may wait on the DB writer). True when the message
+                            // was admitted or is already held as a duplicate.
+                            val held = delegate?.onMessageReceived(message) == true
 
-                            // Send delivery ACK exactly like iOS, after admission as before
-                            sendDeliveryAck(privateMessage.messageID, peerID)
+                            // Send the delivery ACK exactly like iOS, only once the message is
+                            // held. On a failed admission send none: the sender keeps it queued
+                            // and resends.
+                            if (held && isCurrent(ticket)) {
+                                sendDeliveryAck(privateMessage.messageID, peerID)
+                            }
                         }
                     }
                 }
@@ -141,8 +168,15 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                         val senderNickname = delegate?.getPeerNickname(peerID) ?: "Unknown"
                         val myNickname = delegate?.getMyNickname()
                         val timestamp = java.util.Date(packet.timestamp.toLong())
+                        val ticket = receiveTicket()
                         receiveSideEffects.submit(peerID, "private file") {
+                            if (!isCurrent(ticket)) return@submit
                             val savedPath = com.bitchat.android.features.file.FileUtils.saveIncomingFile(appContext, file)
+                            if (!isCurrent(ticket)) {
+                                // A wipe started during the save: remove the file, no ACK.
+                                runCatching { java.io.File(savedPath).delete() }
+                                return@submit
+                            }
                             val message = BitchatMessage(
                                 id = uniqueMsgId,
                                 sender = senderNickname,
@@ -155,13 +189,13 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                                 senderPeerID = peerID
                             )
 
-                            if (!LiveVoiceManager.getInstance(appContext).absorbFinalizedVoiceNote(message)) {
-                                delegate?.onMessageReceived(message)
-                            }
+                            val held = LiveVoiceManager.getInstance(appContext)
+                                .absorbFinalizedVoiceNote(message) ||
+                                delegate?.onMessageReceived(message) == true
 
-                            // Send delivery ACK with generated message ID, only after save and
-                            // hand-off succeeded (a throw above skips it, as before)
-                            sendDeliveryAck(uniqueMsgId, peerID)
+                            // Send delivery ACK with generated message ID, only after the save and
+                            // a successful hand-off or admission (a throw above skips it too)
+                            if (held && isCurrent(ticket)) sendDeliveryAck(uniqueMsgId, peerID)
                         }
                     } else {
                         Log.w(TAG, "Failed to decode encrypted file transfer from $peerID")
@@ -628,12 +662,21 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
         return result
     }
 
-    /**
-     * Shutdown the handler
-     */
     /** Waits for queued receive side effects to finish. For tests. */
     internal suspend fun awaitReceiveSideEffects() = receiveSideEffects.awaitIdle()
 
+    /**
+     * Panic wipe: synchronously invalidates and cancels queued receive side effects, so none of
+     * them writes a file, admits a message, or sends a delivery ACK afterwards.
+     */
+    fun cancelPendingReceiveSideEffects() {
+        receiveEpoch.incrementAndGet()
+        receiveSideEffects.cancelAll()
+    }
+
+    /**
+     * Shutdown the handler
+     */
     fun shutdown() {
         handlerScope.cancel()
     }
@@ -750,7 +793,8 @@ interface MessageHandlerDelegate {
     fun decryptChannelMessage(encryptedContent: ByteArray, channel: String): String?
 
     // Callbacks
-    fun onMessageReceived(message: BitchatMessage)
+    /** Returns true when the message was admitted or is a duplicate already held (safe to ACK). */
+    fun onMessageReceived(message: BitchatMessage): Boolean
     fun onChannelLeave(channel: String, fromPeer: String)
     fun onDeliveryAckReceived(messageID: String, peerID: String)
     fun onReadReceiptReceived(messageID: String, peerID: String)

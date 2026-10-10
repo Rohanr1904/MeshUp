@@ -187,13 +187,13 @@ class WifiAwareMeshService(private val context: Context) : MeshService, Transpor
         fragmentingSender = FragmentingPacketSender(serviceScope, meshCore.fragmentManager, TAG)
     }
 
-    private fun handleMessageReceived(message: BitchatMessage): Boolean {
+    private fun handleMessageReceived(
+        message: BitchatMessage
+    ): com.bitchat.android.services.IncomingAdmissionResult {
         // Match BLE admission semantics: a private message rejected during panic or as a
         // duplicate must not create a notification after the conversation state was cleared.
-        if (
-            !com.bitchat.android.services.IncomingMessageAdmission
-                .admitToAppState(message)
-        ) return false
+        val admission = com.bitchat.android.services.IncomingMessageAdmission.admit(message)
+        if (admission != com.bitchat.android.services.IncomingAdmissionResult.ADMITTED) return admission
 
         if (delegate == null && message.isPrivate) {
             try {
@@ -206,7 +206,7 @@ class WifiAwareMeshService(private val context: Context) : MeshService, Transpor
                 }
             } catch (_: Exception) { }
         }
-        return true
+        return com.bitchat.android.services.IncomingAdmissionResult.ADMITTED
     }
 
     /**

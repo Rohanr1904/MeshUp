@@ -142,13 +142,17 @@ class ConversationRepository internal constructor(
         }
     }
 
+    /**
+     * Returns true when the row was inserted, false when it already existed (a duplicate), and
+     * null when the write failed.
+     */
     suspend fun upsertMessageAndWait(
         conversationID: String,
         aliases: Set<String>,
         displayName: String?,
         message: BitchatMessage,
         isRead: Boolean
-    ): Boolean = withContext(dispatcher) {
+    ): Boolean? = withContext(dispatcher) {
         upsertMessageLocked(conversationID, aliases, displayName, message, isRead)
     }
 
@@ -158,7 +162,7 @@ class ConversationRepository internal constructor(
         displayName: String?,
         message: BitchatMessage,
         isRead: Boolean
-    ): Boolean = try {
+    ): Boolean? = try {
         val result = database.upsertMessage(
             conversationID = conversationID,
             aliases = aliases,
@@ -174,7 +178,7 @@ class ConversationRepository internal constructor(
         _storeState.value = ConversationStoreState.Error(
             error.message ?: "Unable to save conversation"
         )
-        false
+        null
     }
 
     fun updateDeliveryStatus(messageID: String, status: DeliveryStatus) {
