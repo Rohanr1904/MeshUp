@@ -55,6 +55,11 @@ class BluetoothPacketBroadcaster(
         private const val MAX_PENDING_BYTES_PER_LINK = 1_048_576
         private const val SEND_RETRY_DELAY_MS = 15L
         private const val MAX_CALLBACK_RETRIES = 3
+        // MeshUp: bound on waiting for a GATT completion callback that some stacks never deliver.
+        private const val SEND_COMPLETION_TIMEOUT_MS = 1_500L
+        // MeshUp: a link whose sends are refused this long is dropped so it can reconnect.
+        private const val SEND_STALL_DISCONNECT_MS = 3_000L
+        private const val STALLED_LINK_RELEASE_MS = 2_000L
     }
 
     // Optional nickname resolver injected by higher layer (peerID -> nickname?)
@@ -139,19 +144,51 @@ class BluetoothPacketBroadcaster(
         val device: BluetoothDevice,
         val gatt: BluetoothGatt? = null,
         val gattServer: BluetoothGattServer? = null,
-        val characteristic: BluetoothGattCharacteristic,
-        var callbackFailures: Int = 0
+        val characteristic: BluetoothGattCharacteristic
     )
 
-    private class LinkSendState {
-        val pending = ArrayDeque<PendingSend>()
-        var pendingBytes = 0
-        var inFlight = false
-        var retryScheduled = false
-    }
+    private val sendQueue = GattSendQueue<SendKey, PendingSend>(
+        scope = connectionScope,
+        sizeOf = { it.data.size },
+        start = ::startSend,
+        maxPendingPerLink = MAX_PENDING_SENDS_PER_LINK,
+        maxPendingBytesPerLink = MAX_PENDING_BYTES_PER_LINK,
+        retryDelayMs = SEND_RETRY_DELAY_MS,
+        maxCallbackRetries = MAX_CALLBACK_RETRIES,
+        completionTimeoutMs = SEND_COMPLETION_TIMEOUT_MS,
+        stallAfterMs = SEND_STALL_DISCONNECT_MS,
+        now = { android.os.SystemClock.elapsedRealtime() },
+        onLinkStalled = ::dropStalledLink,
+        tag = TAG
+    )
 
-    private val sendLock = Any()
-    private val sendStates = mutableMapOf<SendKey, LinkSendState>()
+    /**
+     * The stack kept refusing to start sends on this link (e.g. its busy flag stayed set after a
+     * lost completion callback). Disconnect it; the normal reconnect path rebuilds a clean link.
+     */
+    @SuppressLint("MissingPermission")
+    private fun dropStalledLink(key: SendKey, request: PendingSend) {
+        try {
+            when (key.direction) {
+                SendDirection.CLIENT_WRITE -> request.gatt?.disconnect()
+                SendDirection.SERVER_NOTIFICATION -> request.gattServer?.cancelConnection(request.device)
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to drop stalled BLE link: ${error.message}")
+        }
+        // A wedged stack may never report the disconnect. If the same link is still tracked after
+        // a grace period, release it locally so it is not reused and a fresh link can form.
+        connectionScope.launch {
+            delay(STALLED_LINK_RELEASE_MS)
+            if (connectionTracker.getCurrentLinkID(key.deviceAddress) != key.linkID) return@launch
+            Log.w(TAG, "Stalled BLE link did not disconnect; releasing it")
+            if (key.direction == SendDirection.CLIENT_WRITE) {
+                try { request.gatt?.close() } catch (_: Exception) { }
+            }
+            connectionTracker.cleanupDeviceConnectionIfCurrent(key.deviceAddress, key.linkID)
+            onLinkDisconnected(key.deviceAddress, key.linkID)
+        }
+    }
     
     // SERIALIZATION: Actor to serialize all broadcast operations
     @OptIn(kotlinx.coroutines.ObsoleteCoroutinesApi::class)
@@ -508,34 +545,13 @@ class BluetoothPacketBroadcaster(
      * readiness-driven iOS transport and prevents later voice frames from overwriting an operation
      * that the controller has not completed yet.
      */
-    private fun enqueueSend(key: SendKey, request: PendingSend): Boolean {
-        val startNow = synchronized(sendLock) {
-            val state = sendStates.getOrPut(key, ::LinkSendState)
-            if (
-                state.pending.size >= MAX_PENDING_SENDS_PER_LINK ||
-                state.pendingBytes + request.data.size > MAX_PENDING_BYTES_PER_LINK
-            ) {
-                Log.w(TAG, "BLE send queue full for ${key.direction}; rejecting ${request.data.size} bytes")
-                return false
-            }
-            state.pending.addLast(request)
-            state.pendingBytes += request.data.size
-            if (!state.inFlight && !state.retryScheduled) {
-                state.inFlight = true
-                true
-            } else {
-                false
-            }
-        }
-        if (startNow) startHead(key)
-        return true
-    }
+    private fun enqueueSend(key: SendKey, request: PendingSend): Boolean =
+        sendQueue.enqueue(key, request) { key.direction.toString() }
 
     @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission", "ObsoleteSdkInt")
-    private fun startHead(key: SendKey) {
-        val request = synchronized(sendLock) { sendStates[key]?.pending?.peekFirst() } ?: return
-        val accepted = try {
+    private fun startSend(key: SendKey, request: PendingSend): Boolean {
+        return try {
             when (key.direction) {
                 SendDirection.CLIENT_WRITE -> {
                     val gatt = request.gatt
@@ -574,80 +590,26 @@ class BluetoothPacketBroadcaster(
             Log.w(TAG, "BLE ${key.direction} failed to start: ${error.message}")
             false
         }
-        if (!accepted) rejectStart(key)
-    }
-
-    private fun rejectStart(key: SendKey): Boolean {
-        val schedule = synchronized(sendLock) {
-            val state = sendStates[key] ?: return false
-            state.inFlight = false
-            if (state.retryScheduled || state.pending.isEmpty()) false else {
-                state.retryScheduled = true
-                true
-            }
-        }
-        if (schedule) {
-            connectionScope.launch {
-                delay(SEND_RETRY_DELAY_MS)
-                val retry = synchronized(sendLock) {
-                    val state = sendStates[key] ?: return@synchronized false
-                    state.retryScheduled = false
-                    if (!state.inFlight && state.pending.isNotEmpty()) {
-                        state.inFlight = true
-                        true
-                    } else false
-                }
-                if (retry) startHead(key)
-            }
-        }
-        return false
     }
 
     fun onGattClientWriteComplete(deviceAddress: String, linkID: String, status: Int) {
-        completeSend(SendKey(deviceAddress, linkID, SendDirection.CLIENT_WRITE), status)
+        sendQueue.complete(
+            SendKey(deviceAddress, linkID, SendDirection.CLIENT_WRITE),
+            status == BluetoothGatt.GATT_SUCCESS
+        )
     }
 
     fun onGattServerNotificationComplete(deviceAddress: String, linkID: String?, status: Int) {
         if (linkID == null) return
-        completeSend(SendKey(deviceAddress, linkID, SendDirection.SERVER_NOTIFICATION), status)
-    }
-
-    private fun completeSend(key: SendKey, status: Int) {
-        var retry = false
-        val startNext = synchronized(sendLock) {
-            val state = sendStates[key] ?: return
-            val head = state.pending.peekFirst() ?: run {
-                sendStates.remove(key)
-                return
-            }
-            state.inFlight = false
-            if (status != BluetoothGatt.GATT_SUCCESS && head.callbackFailures < MAX_CALLBACK_RETRIES) {
-                head.callbackFailures++
-                retry = true
-                false
-            } else {
-                if (status != BluetoothGatt.GATT_SUCCESS) {
-                    Log.w(TAG, "BLE ${key.direction} failed with status $status after retries")
-                }
-                state.pending.removeFirst()
-                state.pendingBytes -= head.data.size
-                if (state.pending.isEmpty()) {
-                    sendStates.remove(key)
-                    false
-                } else {
-                    state.inFlight = true
-                    true
-                }
-            }
-        }
-        if (retry) rejectStart(key) else if (startNext) startHead(key)
+        sendQueue.complete(
+            SendKey(deviceAddress, linkID, SendDirection.SERVER_NOTIFICATION),
+            status == BluetoothGatt.GATT_SUCCESS
+        )
     }
 
     fun onLinkDisconnected(deviceAddress: String, linkID: String?) {
-        synchronized(sendLock) {
-            sendStates.keys.removeAll { key ->
-                key.deviceAddress == deviceAddress && (linkID == null || key.linkID == linkID)
-            }
+        sendQueue.removeLinks { key ->
+            key.deviceAddress == deviceAddress && (linkID == null || key.linkID == linkID)
         }
     }
     
@@ -660,6 +622,8 @@ class BluetoothPacketBroadcaster(
             appendLine("Broadcaster Scope Active: ${broadcasterScope.isActive}")
             appendLine("Actor Channel Closed: ${broadcasterActor.isClosedForSend}")
             appendLine("Connection Scope Active: ${connectionScope.isActive}")
+            appendLine("GATT completions forced by timeout: ${sendQueue.timedOutCompletions}")
+            appendLine("BLE links dropped after refusing sends: ${sendQueue.stalledLinks}")
         }
     }
     
@@ -667,7 +631,7 @@ class BluetoothPacketBroadcaster(
      * Shutdown the broadcaster actor gracefully
      */
     fun shutdown() {
-        synchronized(sendLock) { sendStates.clear() }
+        sendQueue.removeLinks { true }
         // Close the actor gracefully
         broadcasterActor.close()
 
