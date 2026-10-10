@@ -19,6 +19,25 @@ one Play listing must have a unique version code.
 For the technical trust model and third-party verification instructions, see
 [Reproducible builds](reproducible-builds.md).
 
+## NearBird v1 release profile (Decision 018)
+
+NearBird v1 is published on GitHub Releases only; there is no Play listing
+(Decision 016). Where this guide and this profile differ, follow this profile:
+
+- **Tag:** an annotated, **unsigned** tag is accepted for v1. Use
+  `git tag -a "$TAG" -m "NearBird $TAG"` instead of `git tag -s` in section 2,
+  and skip `git tag -v`. The APKs are still signed with the pinned NearBird
+  release key, and the build is still attested by GitHub.
+- **Skip Play steps:** section 6 (sign Play AABs), section 9 (Play internal
+  track) and the Play promotion in section 10. Do not create a Play upload key.
+- **Assets:** without Play upload AABs, `NEARBIRD_SHA256SUMS` lists **15**
+  assets, and the GitHub Release has **17** files (15 plus the source archive
+  and its `.sha256`). `prepare-github-release.sh` accepts both layouts.
+- **Windows:** the helper scripts accept `sha256sum` output from Git Bash
+  (`" *name"` lines) as well as Linux/macOS output.
+- **Release gate:** the physical-device gate is
+  `docs/release/NEARBIRD_DEVICE_TEST_PLAN.md`; all MUST rows must pass.
+
 ## Release flow
 
 | Stage | Where it happens | Result |

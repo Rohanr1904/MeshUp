@@ -1,9 +1,7 @@
-> **DRAFT — not yet published.** It will be published at https://rohanr1904.github.io/nearbird/ after legal review. Prepared for review by a qualified lawyer; not legal advice.
-
 # NearBird Privacy Policy
 
 *Last updated: [publication date]*
-*Published at: https://rohanr1904.github.io/nearbird/*
+*Published at: https://rohanr1904.github.io/nearbird/privacy/*
 
 NearBird is an offline-first messenger. It lets phones near each other exchange messages over Bluetooth without accounts, phone numbers or servers. This policy explains what the app stores, what it shares, and with whom.
 
@@ -98,7 +96,7 @@ NearBird is free software under the GNU General Public License v3.0. You can rev
 
 ## Changes
 
-If this policy changes, the "Last updated" date will change and the new policy will ship with the app and be published at https://rohanr1904.github.io/nearbird/.
+If this policy changes, the "Last updated" date will change and the new policy will ship with the app and be published at https://rohanr1904.github.io/nearbird/privacy/.
 
 ## Contact
 
