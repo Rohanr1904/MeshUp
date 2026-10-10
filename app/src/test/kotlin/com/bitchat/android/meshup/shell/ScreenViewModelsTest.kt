@@ -86,4 +86,8 @@ class ScreenViewModelsTest {
         assertEquals(MeshUpTab.CHATS, shell.tab)
         assertFalse(shell.handleBack())
     }
+
+    @Test fun roomsTabHiddenInV1() {
+        assertEquals(listOf(MeshUpTab.CHATS, MeshUpTab.PEOPLE, MeshUpTab.PROFILE), visibleTabs())
+    }
 }

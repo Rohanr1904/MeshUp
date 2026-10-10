@@ -157,3 +157,15 @@ Consequences:
   their absence.
 - **Repository renamed** `MeshUp` -> `nearbird` (2026-10-10) so that the GitHub
   Pages site is `https://rohanr1904.github.io/nearbird/`.
+
+## Decision 019 — Rooms tab hidden in v1 (2026-10-11, default per owner's "proceed with defaults")
+
+Emulator testing showed that mesh channel ("room") messages carry no channel on the wire:
+`BluetoothMeshService.sendMessage` ignores its `channel` argument, as upstream bitchat does. A
+message posted in a room therefore arrives in everyone's **public** chat, and rooms never form
+across devices. This also explains the owner's report that rooms "failed" on two phones.
+
+- v1 hides the Rooms tab (`ROOMS_TAB_ENABLED = false`); the code stays.
+- The public chat is the shared space for everyone nearby.
+- Real rooms need a channel field on the wire. That is a protocol change with bitchat-compatibility
+  impact (Decision 012), so it is planned for Phase 3 (Nearby Rooms), not v1.

@@ -118,7 +118,7 @@ fun MeshUpApp(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                MeshUpTab.values().forEach { t ->
+                visibleTabs().forEach { t ->
                     NavigationBarItem(
                         modifier = Modifier.testTag("tab_${t.route}"),
                         selected = tab == t,
