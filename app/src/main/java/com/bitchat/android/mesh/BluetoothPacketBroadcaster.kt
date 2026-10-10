@@ -59,6 +59,7 @@ class BluetoothPacketBroadcaster(
         private const val SEND_COMPLETION_TIMEOUT_MS = 1_500L
         // MeshUp: a link whose sends are refused this long is dropped so it can reconnect.
         private const val SEND_STALL_DISCONNECT_MS = 3_000L
+        private const val STALLED_LINK_RELEASE_MS = 2_000L
     }
 
     // Optional nickname resolver injected by higher layer (peerID -> nickname?)
@@ -174,6 +175,18 @@ class BluetoothPacketBroadcaster(
             }
         } catch (error: Exception) {
             Log.w(TAG, "Failed to drop stalled BLE link: ${error.message}")
+        }
+        // A wedged stack may never report the disconnect. If the same link is still tracked after
+        // a grace period, release it locally so it is not reused and a fresh link can form.
+        connectionScope.launch {
+            delay(STALLED_LINK_RELEASE_MS)
+            if (connectionTracker.getCurrentLinkID(key.deviceAddress) != key.linkID) return@launch
+            Log.w(TAG, "Stalled BLE link did not disconnect; releasing it")
+            if (key.direction == SendDirection.CLIENT_WRITE) {
+                try { request.gatt?.close() } catch (_: Exception) { }
+            }
+            connectionTracker.cleanupDeviceConnectionIfCurrent(key.deviceAddress, key.linkID)
+            onLinkDisconnected(key.deviceAddress, key.linkID)
         }
     }
     

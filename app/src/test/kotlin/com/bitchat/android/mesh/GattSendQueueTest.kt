@@ -153,6 +153,22 @@ class GattSendQueueTest {
         assertEquals("fresh", started.last())
     }
 
+    @Test fun acceptedStartResetsTheStallClock() {
+        val q = queue(stallMs = 3_000L)
+        accept = false
+        q.enqueue("link", "a") { "k" }
+        q.enqueue("link", "b") { "k" }
+        advance(2_000L) // refused for 2 s
+        accept = true
+        advance(16L) // "a" accepted: refusal streak broken
+        accept = false
+        q.complete("link", success = true) // "b" refused from t=2016
+        advance(2_900L)
+        assertTrue(stalled.isEmpty())
+        advance(200L)
+        assertEquals(listOf("link" to "b"), stalled)
+    }
+
     @Test fun linksAreIndependent() {
         val q = queue()
         q.enqueue("stuck", "s1") { "k" }
