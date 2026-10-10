@@ -13,7 +13,7 @@ The next Claude Code session.
 - The owner preference: **product decisions use the proposed defaults**. Record each one and report it. Still ask about legal questions, irreversible public actions (publishing, making the repo public, shipping the app ID), and anything involving credentials or signing keys.
 
 ## Where things are
-- **Repository:** `github.com/Rohanr1904/MeshUp`. **Work in `C:\dev\MeshUp`.** `C:\dev\MeshUp-ops` is a second worktree used for merge/sync work. The OneDrive folder is stale; don't build there.
+- **Repository:** `github.com/Rohanr1904/nearbird`. **Work in `C:\dev\MeshUp`.** `C:\dev\MeshUp-ops` is a second worktree used for merge/sync work. The OneDrive folder is stale; don't build there.
 - **App:** NearBird, `io.github.rohanr1904.nearbird`. Kotlin packages remain `com.bitchat.android`, and wire identifiers stay BitChat-compatible (Decision 012).
 - **Build:** run Gradle with `export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"`.
 - **Local unit tests:** the 5 TD-29 classes fail on Windows only (see AI_STATUS); CI on Ubuntu is authoritative.

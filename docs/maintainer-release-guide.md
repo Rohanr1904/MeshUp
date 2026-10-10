@@ -61,7 +61,7 @@ The maintainer needs:
 
 - permission to push a release tag and create GitHub Releases;
 - a GitHub CLI login authorized for
-  `Rohanr1904/MeshUp`;
+  `Rohanr1904/nearbird`;
 - Play Console permission to create and promote releases for
   `io.github.rohanr1904.nearbird`; and
 - access to the project's release approval record.
@@ -144,7 +144,7 @@ git log -1 --oneline
 Set shell variables for the rest of the release:
 
 ```bash
-export REPOSITORY=Rohanr1904/MeshUp
+export REPOSITORY=Rohanr1904/nearbird
 export TAG=vX.Y.Z
 export VERSION_CODE=NN
 export WEAR_VERSION_CODE=1000000001
@@ -449,7 +449,7 @@ Create a local release-notes file. At minimum it must contain:
 - Version code: NN
 - Wear version: X.Y.Z (code 1000000001)
 - Source tag: vX.Y.Z
-- Source: nearbird-vX.Y.Z-source.tar.gz (attached), or tag vX.Y.Z at https://github.com/Rohanr1904/MeshUp
+- Source: nearbird-vX.Y.Z-source.tar.gz (attached), or tag vX.Y.Z at https://github.com/Rohanr1904/nearbird
 - GitHub APK signing certificate SHA-256: FINGERPRINT
 - Play upload certificate SHA-256: FINGERPRINT
 - Play app-signing certificate SHA-256: FINGERPRINT

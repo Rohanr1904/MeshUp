@@ -15,6 +15,6 @@ Mesh messaging works with no Internet connection. Optional Internet features, su
 The developers receive no data from the app. There are no analytics and no ads. See the privacy policy in the source repository for details, including a note about the Google ML Kit QR scanner.
 
 <b>Open source</b>
-NearBird is free software under the GNU General Public License v3.0. It is based on bitchat for Android by permissionlesstech and is wire-compatible with BitChat clients. The source code is at https://github.com/Rohanr1904/MeshUp
+NearBird is free software under the GNU General Public License v3.0. It is based on bitchat for Android by permissionlesstech and is wire-compatible with BitChat clients. The source code is at https://github.com/Rohanr1904/nearbird
 
 Bluetooth range is limited and message delivery is not guaranteed. NearBird is for adults aged 18 and over.

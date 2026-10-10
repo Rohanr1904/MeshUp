@@ -65,7 +65,7 @@ Android and Gradle images and dependencies. R8's single-threaded deterministic
 mode can exceed an 8 GiB Docker memory limit while optimizing the phone app.
 
 ```bash
-git clone https://github.com/Rohanr1904/MeshUp.git
+git clone https://github.com/Rohanr1904/nearbird.git
 cd MeshUp
 git checkout vX.Y.Z
 tools/reproducible-builds/build-in-container.sh \
@@ -154,8 +154,8 @@ GitHub's manual equivalents are:
 gh release download vX.Y.Z
 sha256sum -c NEARBIRD_SHA256SUMS
 gh attestation verify nearbird-universal-unsigned.apk \
-  --repo Rohanr1904/MeshUp \
-  --signer-workflow Rohanr1904/MeshUp/.github/workflows/release.yml \
+  --repo Rohanr1904/nearbird \
+  --signer-workflow Rohanr1904/nearbird/.github/workflows/release.yml \
   --source-ref refs/tags/vX.Y.Z
 ```
 
@@ -166,8 +166,8 @@ content rather than by rebuilding it:
 
 ```bash
 gh attestation verify nearbird-vX.Y.Z-source.tar.gz \
-  --repo Rohanr1904/MeshUp \
-  --signer-workflow Rohanr1904/MeshUp/.github/workflows/release.yml \
+  --repo Rohanr1904/nearbird \
+  --signer-workflow Rohanr1904/nearbird/.github/workflows/release.yml \
   --source-ref refs/tags/vX.Y.Z
 gzip -dc nearbird-vX.Y.Z-source.tar.gz | git get-tar-commit-id   # must equal the tag commit
 ```
