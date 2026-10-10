@@ -45,7 +45,7 @@ NearBird is a security-sensitive messenger. People should be able to tell the ge
 
 ## Questions for the lawyer
 
-- Is a policy file enough, or should "NearBird" be registered (India, Nice classes 9, 38, 42), and when? A read-only search on 2026-10-08 found no identical mark in the USPTO or WIPO data, one possibly similar class 9 mark in India (GEARBIRD, 5948768), and the direct IP India search is still outstanding (owner action). See `LEGAL_RESEARCH.md` section 4.
+- Is a policy file enough, or should "NearBird" be registered (India, Nice classes 9, 38, 42), and when? A read-only search on 2026-10-08 found no identical mark in the USPTO or WIPO data, one possibly similar class 9 mark in India (GEARBIRD, 5948768), and the IP India index search on 2026-10-10 found no NEARBIRD / NEAR BIRD / NEARBYRD mark in classes 9/38/42 (phonetic search not run; portal 503). See `LEGAL_RESEARCH.md` section 4.
 - Does the wording "unmodified official release may be redistributed" conflict with the app-ID and signature restrictions under GPLv3 section 7?
 
 Prepared for review by a qualified lawyer; not legal advice.

@@ -25,7 +25,7 @@
 7. Update `docs/AI_STATUS.md` launch gates 3–4 with the results.
 
 ## Owner actions (Claude cannot do these)
-- Run the IP India ESEARCH trademark search (portal needs an OTP login) for NearBird / Near Bird / Nearbyrd in classes 9, 38, 42. USPTO and WIPO were searched on 2026-10-08 (no identical mark; see `LEGAL_RESEARCH.md` section 4).
+- ~~Run the IP India trademark search~~ DONE 2026-10-10 (index search, no record in classes 9/38/42; phonetic ESEARCH portal returned 503, left to the lawyer). USPTO and WIPO were searched on 2026-10-08. See `LEGAL_RESEARCH.md` section 4.
 - Create a dedicated NearBird contact mailbox.
 - Optionally set git to the GitHub noreply email for future commits.
 - Book the lawyer/CA review using `docs/legal/LAWYER_BRIEF.md`.
