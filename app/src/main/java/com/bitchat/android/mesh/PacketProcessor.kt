@@ -27,6 +27,9 @@ class PacketProcessor(
     companion object {
         private const val TAG = "PacketProcessor"
         private const val DROP_LOG_INTERVAL_MS = 5_000L
+        /** A single packet occupying a stripe longer than this is logged (type only, no IDs). */
+        internal const val STRIPE_WATCHDOG_MS = 2_000L
+        private const val WATCHDOG_TICK_MS = 1_000L
     }
     
     // Delegate for callbacks
@@ -64,6 +67,15 @@ class PacketProcessor(
         )
     }
     private val stripeJobs: List<Job>
+    private val watchdogJob: Job
+
+    // Per-stripe in-flight packet, read by the watchdog. Races with the worker only affect logging.
+    private class StripeActivity {
+        @Volatile var startedNanos = 0L
+        @Volatile var type: String = ""
+        @Volatile var stallLogged = false
+    }
+    private val stripeActivity = List(AppConstants.Mesh.STRIPES) { StripeActivity() }
 
     // Per-stripe queued-packet count per link key; entries removed at 0, so bounded by queue capacity.
     // Each map is guarded by its own monitor.
@@ -90,21 +102,52 @@ class PacketProcessor(
     init {
         // Set up the packet relay manager delegate immediately
         setupRelayManager()
-        stripeJobs = stripes.map { channel ->
+        stripeJobs = stripes.mapIndexed { index, channel ->
+            val activity = stripeActivity[index]
             processorScope.launch {
                 for (queued in channel) {
                     releaseSlot(queued)
+                    val started = System.nanoTime()
+                    activity.type = packetTypeName(queued.routed.packet.type)
+                    activity.stallLogged = false
+                    activity.startedNanos = started
                     try {
                         handleReceivedPacket(queued.routed)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         Log.w(TAG, "Packet handling failed: ${e.message}")
+                    } finally {
+                        activity.startedNanos = 0L
+                        val elapsedMs = (System.nanoTime() - started) / 1_000_000L
+                        if (elapsedMs > STRIPE_WATCHDOG_MS) {
+                            Log.w(TAG, "Slow packet on stripe: type=${activity.type} took ${elapsedMs}ms")
+                        }
+                    }
+                }
+            }
+        }
+        // Logs a packet that is still stuck on a stripe, so a permanent stall leaves evidence too.
+        watchdogJob = processorScope.launch {
+            while (isActive) {
+                delay(WATCHDOG_TICK_MS)
+                val now = System.nanoTime()
+                stripeActivity.forEach { activity ->
+                    val started = activity.startedNanos
+                    if (started != 0L && !activity.stallLogged) {
+                        val elapsedMs = (now - started) / 1_000_000L
+                        if (elapsedMs > STRIPE_WATCHDOG_MS) {
+                            activity.stallLogged = true
+                            Log.w(TAG, "Stripe stalled: type=${activity.type} running for ${elapsedMs}ms")
+                        }
                     }
                 }
             }
         }
     }
+
+    private fun packetTypeName(type: UByte): String =
+        MessageType.fromValue(type)?.name ?: "0x" + type.toString(16)
 
     private fun recordDrop(reason: String) {
         if (closed) return
@@ -374,6 +417,7 @@ class PacketProcessor(
         closed = true
         stripes.forEach { it.cancel() } // discards buffered packets; recordDrop is a no-op once closed
         stripeJobs.forEach { it.cancel() }
+        watchdogJob.cancel()
         
         // Shutdown the relay manager
         packetRelayManager.shutdown()
@@ -399,8 +443,8 @@ interface PacketProcessorDelegate {
     fun getBroadcastRecipient(): ByteArray
     
     // Message type handlers
-    fun handleNoiseHandshake(routed: RoutedPacket): Boolean
-    fun handleNoiseEncrypted(routed: RoutedPacket): Boolean
+    suspend fun handleNoiseHandshake(routed: RoutedPacket): Boolean
+    suspend fun handleNoiseEncrypted(routed: RoutedPacket): Boolean
     suspend fun handleAnnounce(routed: RoutedPacket): Boolean
     fun handleMessage(routed: RoutedPacket)
     fun handleVoiceFrame(routed: RoutedPacket): Boolean = false

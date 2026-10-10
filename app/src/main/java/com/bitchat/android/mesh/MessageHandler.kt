@@ -41,6 +41,11 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
     // Coroutines
     private val handlerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // Slow receive side effects (file save, voice hand-off, durable DB admission, notifications,
+    // delivery ACK) run here instead of on the PacketProcessor stripe. One lane per sender keeps
+    // that sender's user-visible messages in arrival order; decryption stays on the stripe.
+    private val receiveSideEffects = SerialLanes(handlerScope, tag = TAG)
+
     // Consecutive decrypt failures per peer; only signature-verified packets reach this path,
     // so repeated failures mean the established session is stale (peer re-handshaked elsewhere).
     private val consecutiveDecryptFailures = java.util.concurrent.ConcurrentHashMap<String, Int>()
@@ -95,9 +100,11 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                         // Handle favorite/unfavorite notifications embedded as PMs
                         val pmContent = privateMessage.content
                         if (FavoriteControlMessage.parse(pmContent) != null) {
-                            handleFavoriteNotificationFromMesh(pmContent, peerID)
-                            // Acknowledge delivery for UX parity
-                            sendDeliveryAck(privateMessage.messageID, peerID)
+                            receiveSideEffects.submit(peerID, "favorite") {
+                                handleFavoriteNotificationFromMesh(pmContent, peerID)
+                                // Acknowledge delivery for UX parity
+                                sendDeliveryAck(privateMessage.messageID, peerID)
+                            }
                             return true
                         }
                         
@@ -115,11 +122,13 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                             mentions = null
                         )
                         
-                        // Notify delegate
-                        delegate?.onMessageReceived(message)
-                        
-                        // Send delivery ACK exactly like iOS
-                        sendDeliveryAck(privateMessage.messageID, peerID)
+                        receiveSideEffects.submit(peerID, "private message") {
+                            // Notify delegate (durable admission may wait on the DB writer)
+                            delegate?.onMessageReceived(message)
+
+                            // Send delivery ACK exactly like iOS, after admission as before
+                            sendDeliveryAck(privateMessage.messageID, peerID)
+                        }
                     }
                 }
                 
@@ -129,25 +138,31 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                     if (file != null) {
                         Log.d(TAG, "Encrypted file from $peerID: ${file.fileSize} bytes")
                         val uniqueMsgId = java.util.UUID.randomUUID().toString().uppercase()
-                        val savedPath = com.bitchat.android.features.file.FileUtils.saveIncomingFile(appContext, file)
-                        val message = BitchatMessage(
-                            id = uniqueMsgId,
-                            sender = delegate?.getPeerNickname(peerID) ?: "Unknown",
-                            content = savedPath,
-                            type = com.bitchat.android.features.file.FileUtils.messageTypeForMime(file.mimeType),
-                            timestamp = java.util.Date(packet.timestamp.toLong()),
-                            isRelay = false,
-                            isPrivate = true,
-                            recipientNickname = delegate?.getMyNickname(),
-                            senderPeerID = peerID
-                        )
+                        val senderNickname = delegate?.getPeerNickname(peerID) ?: "Unknown"
+                        val myNickname = delegate?.getMyNickname()
+                        val timestamp = java.util.Date(packet.timestamp.toLong())
+                        receiveSideEffects.submit(peerID, "private file") {
+                            val savedPath = com.bitchat.android.features.file.FileUtils.saveIncomingFile(appContext, file)
+                            val message = BitchatMessage(
+                                id = uniqueMsgId,
+                                sender = senderNickname,
+                                content = savedPath,
+                                type = com.bitchat.android.features.file.FileUtils.messageTypeForMime(file.mimeType),
+                                timestamp = timestamp,
+                                isRelay = false,
+                                isPrivate = true,
+                                recipientNickname = myNickname,
+                                senderPeerID = peerID
+                            )
 
-                        if (!LiveVoiceManager.getInstance(appContext).absorbFinalizedVoiceNote(message)) {
-                            delegate?.onMessageReceived(message)
+                            if (!LiveVoiceManager.getInstance(appContext).absorbFinalizedVoiceNote(message)) {
+                                delegate?.onMessageReceived(message)
+                            }
+
+                            // Send delivery ACK with generated message ID, only after save and
+                            // hand-off succeeded (a throw above skips it, as before)
+                            sendDeliveryAck(uniqueMsgId, peerID)
                         }
-
-                        // Send delivery ACK with generated message ID
-                        sendDeliveryAck(uniqueMsgId, peerID)
                     } else {
                         Log.w(TAG, "Failed to decode encrypted file transfer from $peerID")
                     }
@@ -616,6 +631,9 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
     /**
      * Shutdown the handler
      */
+    /** Waits for queued receive side effects to finish. For tests. */
+    internal suspend fun awaitReceiveSideEffects() = receiveSideEffects.awaitIdle()
+
     fun shutdown() {
         handlerScope.cancel()
     }

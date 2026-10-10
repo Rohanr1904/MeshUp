@@ -567,12 +567,14 @@ class BluetoothMeshService(private val context: Context) : TransportBridgeServic
                 return SpecialRecipients.BROADCAST
             }
             
-            override fun handleNoiseHandshake(routed: RoutedPacket): Boolean {
-                return runBlocking { securityManager.handleNoiseHandshake(routed) }
+            override suspend fun handleNoiseHandshake(routed: RoutedPacket): Boolean {
+                return securityManager.handleNoiseHandshake(routed)
             }
             
-            override fun handleNoiseEncrypted(routed: RoutedPacket): Boolean {
-                return runBlocking { messageHandler.handleNoiseEncrypted(routed) }
+            override suspend fun handleNoiseEncrypted(routed: RoutedPacket): Boolean {
+                // Runs on the sender's stripe: decrypt in order here; slow side effects are
+                // queued by MessageHandler onto its own per-sender lane.
+                return messageHandler.handleNoiseEncrypted(routed)
             }
             
             override suspend fun handleAnnounce(routed: RoutedPacket): Boolean {
