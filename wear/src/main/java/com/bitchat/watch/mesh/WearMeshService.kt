@@ -13,6 +13,7 @@ import com.bitchat.android.mesh.MeshTransport
 import com.bitchat.android.model.RoutedPacket
 import com.bitchat.android.protocol.BitchatPacket
 import com.bitchat.android.services.AppStateStore
+import com.bitchat.android.services.IncomingAdmissionResult
 import com.bitchat.android.sync.GossipSyncManager
 import com.bitchat.android.util.AppConstants
 import kotlinx.coroutines.CoroutineScope
@@ -228,27 +229,32 @@ class WearMeshService private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Wear keeps its previous behaviour: a private message that is not newly added (duplicate or
+     * panic) suppresses downstream effects but is still acknowledged, as before; a failure while
+     * storing a private message is not acknowledged, so the sender resends.
+     */
     private fun handleMessageReceived(
         message: com.bitchat.android.model.BitchatMessage
-    ): Boolean = try {
+    ): IncomingAdmissionResult = try {
         when {
             message.isPrivate -> {
-                val peer = message.senderPeerID ?: return false
-                if (!AppStateStore.addPrivateMessage(peer, message)) return false
+                val peer = message.senderPeerID ?: return IncomingAdmissionResult.REJECTED
+                if (!AppStateStore.addPrivateMessage(peer, message)) return IncomingAdmissionResult.DUPLICATE
                 try { onPrivateMessage?.invoke(message) } catch (_: Exception) { }
-                true
+                IncomingAdmissionResult.ADMITTED
             }
             message.channel != null -> {
                 AppStateStore.addChannelMessage(message.channel, message)
-                true
+                IncomingAdmissionResult.ADMITTED
             }
             else -> {
                 AppStateStore.addPublicMessage(message)
-                true
+                IncomingAdmissionResult.ADMITTED
             }
         }
     } catch (_: Exception) {
-        !message.isPrivate
+        if (message.isPrivate) IncomingAdmissionResult.REJECTED else IncomingAdmissionResult.ADMITTED
     }
 
     fun startServices() {
