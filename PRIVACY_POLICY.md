@@ -94,7 +94,7 @@ NearBird is intended for people aged **18 and over**. Do not use it if you are u
 
 ## Source code
 
-NearBird is free software under the GNU General Public License v3.0. You can review the source code that implements everything described here at https://github.com/Rohanr1904/MeshUp.
+NearBird is free software under the GNU General Public License v3.0. You can review the source code that implements everything described here at https://github.com/Rohanr1904/nearbird.
 
 ## Changes
 

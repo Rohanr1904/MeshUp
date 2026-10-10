@@ -4,7 +4,7 @@
 
 NearBird is an offline-first Android messenger. Phones near each other exchange messages over a Bluetooth mesh, with no account, no phone number and no central servers. Private chats are end-to-end encrypted. Optional Internet features exist but are **off by default** and must be turned on by the user in Settings.
 
-[GitHub Releases](https://github.com/Rohanr1904/MeshUp/releases)
+[GitHub Releases](https://github.com/Rohanr1904/nearbird/releases)
 
 ## Features
 
@@ -49,7 +49,7 @@ Compatibility: NearBird v1 is wire-compatible with BitChat clients (Decision 012
 Requires Android Studio and the Android SDK (API 26+).
 
 ```bash
-git clone https://github.com/Rohanr1904/MeshUp.git
+git clone https://github.com/Rohanr1904/nearbird.git
 cd MeshUp
 ./gradlew assembleDebug
 ```

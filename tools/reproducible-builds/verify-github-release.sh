@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TAG="${1:?usage: verify-github-release.sh TAG [--no-rebuild]}"
 MODE="${2:-}"
-REPOSITORY="${BITCHAT_GITHUB_REPOSITORY:-Rohanr1904/MeshUp}"
+REPOSITORY="${BITCHAT_GITHUB_REPOSITORY:-Rohanr1904/nearbird}"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 

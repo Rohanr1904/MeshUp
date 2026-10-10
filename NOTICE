@@ -29,8 +29,8 @@ delivery retry; encrypted on-device conversation storage; log redaction; the
 open-source licences screen; and this documentation.
 
 The complete, dated record of every modification is the git history of this
-repository: https://github.com/Rohanr1904/MeshUp (the repository may be renamed
-to NearBird; GitHub redirects the old name). Use `git log --follow <file>` to
+repository: https://github.com/Rohanr1904/nearbird (renamed from MeshUp on 2026-10-10;
+GitHub redirects the old name). Use `git log --follow <file>` to
 see the changes and dates for any single file.
 
 Wire compatibility

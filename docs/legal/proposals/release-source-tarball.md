@@ -96,13 +96,13 @@ GitHub's automatic "Source code (zip / tar.gz)" assets do satisfy the practical 
 Also add to the release-notes template in that guide:
 
 ```diff
-+- Source: nearbird-vX.Y.Z-source.tar.gz (attached), or tag vX.Y.Z at https://github.com/Rohanr1904/MeshUp
++- Source: nearbird-vX.Y.Z-source.tar.gz (attached), or tag vX.Y.Z at https://github.com/Rohanr1904/nearbird
 ```
 
 ## Check after applying
 
 - `verify-github-release.sh` downloads only `BITCHAT_*` and `nearbird-*.apk|aab`. The tarball name does not match `nearbird-*.apk` or `nearbird-*.aab`, so the script is unaffected. Re-run it once to confirm.
-- `gh attestation verify nearbird-vX.Y.Z-source.tar.gz --repo Rohanr1904/MeshUp` should pass.
+- `gh attestation verify nearbird-vX.Y.Z-source.tar.gz --repo Rohanr1904/nearbird` should pass.
 - Unrelated stale item found while reading the guide: its asset table still lists `bitchat-android-*.apk` names, while `prepare-github-release.sh` requires `nearbird-*`. Update the guide when applying this.
 
 ## Question for the lawyer

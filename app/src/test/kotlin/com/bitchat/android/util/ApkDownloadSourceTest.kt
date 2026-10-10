@@ -24,7 +24,7 @@ class ApkDownloadSourceTest {
     @Test
     fun `default source downloads the stable latest universal asset directly`() {
         assertEquals(
-            "https://github.com/Rohanr1904/MeshUp/releases/latest/" +
+            "https://github.com/Rohanr1904/nearbird/releases/latest/" +
                 "download/nearbird-universal.apk",
             DefaultApkDownloadSources.all.single().latestApkUrls.single()
         )
