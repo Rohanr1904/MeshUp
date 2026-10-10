@@ -161,6 +161,16 @@ class ReceiveLaneSafetyTest {
         assertEquals(listOf(peerA), ackedTo.toList())
     }
 
+    @Test
+    fun `rejected file leaves no file`() = runBlocking {
+        admission = { false }
+        handler.handleNoiseEncrypted(packet(peerA, file()))
+        withTimeout(10_000) { handler.awaitReceiveSideEffects() }
+
+        assertTrue("no ACK for a rejected file", ackedTo.isEmpty())
+        assertTrue("rejected file is deleted", incomingFiles().isEmpty())
+    }
+
     private fun incomingFiles(): List<File> =
         File(RuntimeEnvironment.getApplication().cacheDir, "files/incoming")
             .listFiles()?.filter { it.name.startsWith(fileName.substringBefore('.')) }.orEmpty()

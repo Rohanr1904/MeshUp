@@ -120,6 +120,9 @@ class ConversationDatabaseTest {
 
         val restored = database.loadSnapshot()
         assertFalse(duplicate.inserted)
+        assertTrue("an existing row is held, so it is safe to acknowledge", duplicate.held)
+        val blank = database.upsertMessage(" ", emptySet(), null, message("blank", "alice", 300L), false)
+        assertFalse("a skipped write is not held", blank.held)
         assertEquals(setOf("contact_alice"), restored.chats.keys)
         assertEquals(listOf("first", "second"), restored.chats.getValue("contact_alice").map { it.id })
         assertEquals("alice", restored.displayNames.getValue("contact_alice"))

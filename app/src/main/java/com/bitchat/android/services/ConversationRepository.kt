@@ -172,7 +172,9 @@ class ConversationRepository internal constructor(
         )
         deleteStoredMedia(result.orphanedMediaPaths)
         _storeState.value = ConversationStoreState.Ready
-        result.inserted
+        // Not stored and not already present (blank conversation ID, or the insert was skipped
+        // for another constraint): report a failed write, not a duplicate.
+        if (!result.held) null else result.inserted
     } catch (error: Exception) {
         Log.e(TAG, "Unable to persist private message", error)
         _storeState.value = ConversationStoreState.Error(
@@ -399,6 +401,8 @@ internal data class ConversationReadResult(
 
 internal data class ConversationUpsertResult(
     val inserted: Boolean,
+    /** Inserted, already stored, or deliberately deleted by the user (safe to acknowledge). */
+    val held: Boolean,
     val orphanedMediaPaths: Set<String>
 )
 
@@ -975,13 +979,19 @@ internal class ConversationDatabase(
     ): ConversationUpsertResult {
         val normalizedID = conversationID.trim()
         if (normalizedID.isBlank()) {
-            return ConversationUpsertResult(inserted = false, orphanedMediaPaths = emptySet())
+            return ConversationUpsertResult(inserted = false, held = false, orphanedMediaPaths = emptySet())
         }
         val now = System.currentTimeMillis()
         val orphanedMediaPaths = linkedSetOf<String>()
         var messageInserted = false
+        // True when the message is (or deliberately was) stored: inserted, already present, or
+        // deleted by the user. False when the insert was skipped and no row exists.
+        var messageHeld = false
         writableDatabase.inTransaction {
-            if (isDeletedMessageLocked(this, message.id)) return@inTransaction
+            if (isDeletedMessageLocked(this, message.id)) {
+                messageHeld = true
+                return@inTransaction
+            }
             mergeAliasesLocked(
                 db = this,
                 targetConversationID = normalizedID,
@@ -997,6 +1007,7 @@ internal class ConversationDatabase(
                 SQLiteDatabase.CONFLICT_IGNORE
             )
             messageInserted = inserted != -1L
+            messageHeld = messageInserted
             if (inserted != -1L) {
                 registerAttachmentLocked(this, message)
             }
@@ -1012,6 +1023,7 @@ internal class ConversationDatabase(
                     }
                 }
                 if (existingConversation != null) {
+                    messageHeld = true
                     val canonicalExisting = resolveStoredConversationLocked(
                         this,
                         existingConversation.first
@@ -1046,6 +1058,7 @@ internal class ConversationDatabase(
         }
         return ConversationUpsertResult(
             inserted = messageInserted,
+            held = messageHeld,
             orphanedMediaPaths = orphanedMediaPaths
         )
     }

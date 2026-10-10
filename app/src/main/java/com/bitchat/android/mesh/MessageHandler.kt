@@ -193,9 +193,14 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                                 .absorbFinalizedVoiceNote(message) ||
                                 delegate?.onMessageReceived(message) == true
 
+                            if (!held) {
+                                // Rejected: the sender resends under a new ID, so don't keep this copy.
+                                runCatching { java.io.File(savedPath).delete() }
+                                return@submit
+                            }
                             // Send delivery ACK with generated message ID, only after the save and
                             // a successful hand-off or admission (a throw above skips it too)
-                            if (held && isCurrent(ticket)) sendDeliveryAck(uniqueMsgId, peerID)
+                            if (isCurrent(ticket)) sendDeliveryAck(uniqueMsgId, peerID)
                         }
                     } else {
                         Log.w(TAG, "Failed to decode encrypted file transfer from $peerID")
