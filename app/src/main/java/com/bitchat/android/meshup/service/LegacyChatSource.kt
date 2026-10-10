@@ -50,7 +50,10 @@ class ChatViewModelSource(private val vm: ChatViewModel) : LegacyChatSource {
     override fun toggleFavorite(peerId: String) = vm.toggleFavorite(peerId)
     override fun joinChannel(name: String) = vm.joinChannel(name)
     override fun leaveChannel(name: String) = vm.leaveChannel(name)
-    override suspend fun startPrivateChat(peerId: String) = vm.startPrivateChat(peerId)
+    // Private chats are shown in the PrivateChatSheet, which starts the chat itself when it opens.
+    // Selecting the conversation without opening the sheet left the user on the public chat,
+    // where typing sent public messages.
+    override suspend fun startPrivateChat(peerId: String) = vm.showPrivateChatSheet(peerId)
     override fun setNickname(name: String) = vm.setNickname(name)
     override fun myFingerprint() = vm.getMyFingerprint()
     override fun panicClearAllData() = vm.panicClearAllData()
