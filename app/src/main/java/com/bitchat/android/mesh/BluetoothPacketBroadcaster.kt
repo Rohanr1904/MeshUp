@@ -57,6 +57,8 @@ class BluetoothPacketBroadcaster(
         private const val MAX_CALLBACK_RETRIES = 3
         // MeshUp: bound on waiting for a GATT completion callback that some stacks never deliver.
         private const val SEND_COMPLETION_TIMEOUT_MS = 1_500L
+        // MeshUp: a link whose sends are refused this long is dropped so it can reconnect.
+        private const val SEND_STALL_DISCONNECT_MS = 3_000L
     }
 
     // Optional nickname resolver injected by higher layer (peerID -> nickname?)
@@ -153,8 +155,27 @@ class BluetoothPacketBroadcaster(
         retryDelayMs = SEND_RETRY_DELAY_MS,
         maxCallbackRetries = MAX_CALLBACK_RETRIES,
         completionTimeoutMs = SEND_COMPLETION_TIMEOUT_MS,
+        stallAfterMs = SEND_STALL_DISCONNECT_MS,
+        now = { android.os.SystemClock.elapsedRealtime() },
+        onLinkStalled = ::dropStalledLink,
         tag = TAG
     )
+
+    /**
+     * The stack kept refusing to start sends on this link (e.g. its busy flag stayed set after a
+     * lost completion callback). Disconnect it; the normal reconnect path rebuilds a clean link.
+     */
+    @SuppressLint("MissingPermission")
+    private fun dropStalledLink(key: SendKey, request: PendingSend) {
+        try {
+            when (key.direction) {
+                SendDirection.CLIENT_WRITE -> request.gatt?.disconnect()
+                SendDirection.SERVER_NOTIFICATION -> request.gattServer?.cancelConnection(request.device)
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to drop stalled BLE link: ${error.message}")
+        }
+    }
     
     // SERIALIZATION: Actor to serialize all broadcast operations
     @OptIn(kotlinx.coroutines.ObsoleteCoroutinesApi::class)
@@ -589,6 +610,7 @@ class BluetoothPacketBroadcaster(
             appendLine("Actor Channel Closed: ${broadcasterActor.isClosedForSend}")
             appendLine("Connection Scope Active: ${connectionScope.isActive}")
             appendLine("GATT completions forced by timeout: ${sendQueue.timedOutCompletions}")
+            appendLine("BLE links dropped after refusing sends: ${sendQueue.stalledLinks}")
         }
     }
     
