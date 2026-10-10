@@ -210,6 +210,10 @@
   <string name="file_viewer_open_save">📂 Open / Save</string>
   <string name="close_with_emoji">❌ Close</string>
   <string name="pick_image">Pick image</string>
+  <string name="meshup_take_photo">Take photo</string>
+  <string name="meshup_choose_photo">Choose photo</string>
+  <string name="meshup_camera_permission_needed">Camera permission is needed to take photos</string>
+  <string name="meshup_camera_permission_blocked">Camera permission is turned off for NearBird</string>
   <string name="cd_save_current_image">Save current image</string>
   <string name="cd_close">Close</string>
   <string name="toast_image_saved">Image saved to Downloads</string>
