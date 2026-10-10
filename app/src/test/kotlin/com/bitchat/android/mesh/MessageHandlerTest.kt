@@ -244,6 +244,7 @@ class MessageHandlerTest {
             )
 
             handler.handleNoiseEncrypted(RoutedPacket(outerPacket, peerID, "direct-link"))
+            handler.awaitReceiveSideEffects()
 
             verify(delegate).decryptFromPeer(ciphertext, peerID)
             verify(delegate).onMessageReceived(any())

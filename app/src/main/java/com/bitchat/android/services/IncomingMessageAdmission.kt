@@ -11,32 +11,35 @@ import kotlinx.coroutines.runBlocking
  * Public and channel messages retain their existing best-effort behavior if state reflection fails.
  */
 internal object IncomingMessageAdmission {
-    fun admitToAppState(message: BitchatMessage): Boolean = try {
+    fun admitToAppState(message: BitchatMessage): Boolean =
+        admit(message) == IncomingAdmissionResult.ADMITTED
+
+    fun admit(message: BitchatMessage): IncomingAdmissionResult = try {
         when {
             message.isPrivate -> {
                 val peerID = message.senderPeerID?.takeIf(String::isNotBlank)
-                    ?: return false
+                    ?: return IncomingAdmissionResult.REJECTED
                 // Mesh transport callbacks run on their background service workers. Wait for the
                 // serialized SQLite transaction so a notification can never advertise a message
                 // that an immediate process death would lose.
                 runBlocking {
-                    AppStateStore.addPrivateMessageDurably(peerID, message)
+                    AppStateStore.admitPrivateMessageDurably(peerID, message)
                 }
             }
 
             message.channel != null -> {
                 AppStateStore.addChannelMessage(message.channel, message)
-                true
+                IncomingAdmissionResult.ADMITTED
             }
 
             else -> {
                 AppStateStore.addPublicMessage(message)
-                true
+                IncomingAdmissionResult.ADMITTED
             }
         }
     } catch (_: Exception) {
         // Preserve the pre-existing best-effort dispatch for public/channel messages, but never
         // bypass private-message admission when persistence or canonicalization fails.
-        !message.isPrivate
+        if (message.isPrivate) IncomingAdmissionResult.REJECTED else IncomingAdmissionResult.ADMITTED
     }
 }

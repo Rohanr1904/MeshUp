@@ -23,7 +23,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -44,9 +43,10 @@ class MeshCore(
     data class Hooks(
         /**
          * Reflects a decoded message into transport-owned state before delegate dispatch.
-         * Return false to suppress all downstream effects for a rejected message.
+         * Anything but ADMITTED suppresses all downstream effects; only REJECTED withholds the
+         * delivery ACK.
          */
-        val onMessageReceived: ((BitchatMessage) -> Boolean)? = null,
+        val onMessageReceived: ((BitchatMessage) -> com.bitchat.android.services.IncomingAdmissionResult)? = null,
         val onAnnounceProcessed: ((RoutedPacket, Boolean) -> Unit)? = null,
         val readReceiptInterceptor: ((String, String) -> Boolean)? = null,
         val onReadReceiptSent: ((String) -> Unit)? = null,
@@ -402,9 +402,14 @@ class MeshCore(
                 return delegate?.decryptChannelMessage(encryptedContent, channel)
             }
 
-            override fun onMessageReceived(message: BitchatMessage) {
-                if (hooks.onMessageReceived?.invoke(message) == false) return
+            override fun onMessageReceived(message: BitchatMessage): Boolean {
+                val admission = hooks.onMessageReceived?.invoke(message)
+                    ?: com.bitchat.android.services.IncomingAdmissionResult.ADMITTED
+                if (admission != com.bitchat.android.services.IncomingAdmissionResult.ADMITTED) {
+                    return admission.acknowledgeable
+                }
                 delegate?.didReceiveMessage(message)
+                return true
             }
 
             override fun onChannelLeave(channel: String, fromPeer: String) {
@@ -461,12 +466,14 @@ class MeshCore(
                 return SpecialRecipients.BROADCAST
             }
 
-            override fun handleNoiseHandshake(routed: RoutedPacket): Boolean {
-                return runBlocking { securityManager.handleNoiseHandshake(routed) }
+            override suspend fun handleNoiseHandshake(routed: RoutedPacket): Boolean {
+                return securityManager.handleNoiseHandshake(routed)
             }
 
-            override fun handleNoiseEncrypted(routed: RoutedPacket): Boolean {
-                return runBlocking { messageHandler.handleNoiseEncrypted(routed) }
+            override suspend fun handleNoiseEncrypted(routed: RoutedPacket): Boolean {
+                // Runs on the sender's stripe: decrypt in order here; slow side effects are
+                // queued by MessageHandler onto its own per-sender lane.
+                return messageHandler.handleNoiseEncrypted(routed)
             }
 
             override suspend fun handleAnnounce(routed: RoutedPacket): Boolean {
@@ -1084,6 +1091,8 @@ class MeshCore(
     }
 
     fun clearAllInternalData() {
+        // Synchronously drop queued receive side effects (file save, ACK) before the wipe.
+        try { messageHandler.cancelPendingReceiveSideEffects() } catch (_: Exception) { }
         directPeers.clear()
         fragmentManager.clearAllFragments()
         storeForwardManager.clearAllCache()

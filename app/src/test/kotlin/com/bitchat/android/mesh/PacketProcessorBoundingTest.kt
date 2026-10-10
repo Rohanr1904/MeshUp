@@ -302,8 +302,8 @@ class PacketProcessorBoundingTest {
         override fun getPeerNickname(peerID: String): String? = null
         override fun getNetworkSize() = 1
         override fun getBroadcastRecipient(): ByteArray = SpecialRecipients.BROADCAST
-        override fun handleNoiseHandshake(routed: RoutedPacket) = false
-        override fun handleNoiseEncrypted(routed: RoutedPacket) = false
+        override suspend fun handleNoiseHandshake(routed: RoutedPacket) = false
+        override suspend fun handleNoiseEncrypted(routed: RoutedPacket) = false
         override suspend fun handleAnnounce(routed: RoutedPacket) = false
         override fun handleMessage(routed: RoutedPacket) = Unit
         override fun handleLeave(routed: RoutedPacket) = Unit
